@@ -1223,16 +1223,7 @@ pub(crate) fn probe_wdl_syzygy(
                 break;
             }
         }
-        let t = {
-            let np = meta.pawns[0];
-            for ii in 1..np {
-                if FLAP[0][p[0] as usize] > FLAP[0][p[ii] as usize] {
-                    p.swap(0, ii);
-                }
-            }
-            FILE_TO_FILE[p[0] as usize & 7]
-        };
-        let t = t.min(num_tables - 1);
+        let t = leading_pawn(&mut p, meta).min(num_tables - 1);
 
         let (ei, pd) = if split && bside {
             (&ei_split[t].0, &pd_split[t])
@@ -1412,13 +1403,7 @@ pub(crate) fn probe_dtz_syzygy(
                 i,
             );
         }
-        let np = meta.pawns[0];
-        for ii in 1..np {
-            if FLAP[0][p[0] as usize] > FLAP[0][p[ii] as usize] {
-                p.swap(0, ii);
-            }
-        }
-        FILE_TO_FILE[p[0] as usize & 7].min(num_tables - 1)
+        leading_pawn(&mut p, meta).min(num_tables - 1)
     } else {
         0
     };
