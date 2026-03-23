@@ -187,8 +187,26 @@ impl fmt::Display for LoaderError {
 
 impl std::error::Error for LoaderError {}
 
+/// Load and index table files from one or more directories.
+///
+/// `paths` is a slice of directories to scan. Files from later directories
+/// do not overwrite entries already found in earlier directories.
+pub(crate) fn load_table_index_multi(paths: &[&Path]) -> Result<TableIndex, LoaderError> {
+    let mut index = TableIndex::default();
+    for path in paths {
+        load_into_index(path, &mut index)?;
+    }
+    Ok(index)
+}
+
 /// Load and index table files under a single directory.
 pub(crate) fn load_table_index(path: &Path) -> Result<TableIndex, LoaderError> {
+    let mut index = TableIndex::default();
+    load_into_index(path, &mut index)?;
+    Ok(index)
+}
+
+fn load_into_index(path: &Path, index: &mut TableIndex) -> Result<(), LoaderError> {
     if !path.exists() {
         return Err(LoaderError::PathNotFound(path.to_path_buf()));
     }
@@ -200,8 +218,6 @@ pub(crate) fn load_table_index(path: &Path) -> Result<TableIndex, LoaderError> {
         path: path.to_path_buf(),
         source,
     })?;
-
-    let mut index = TableIndex::default();
 
     for entry_result in entries {
         let entry = entry_result.map_err(|source| LoaderError::ReadDirEntryFailed {
@@ -248,7 +264,7 @@ pub(crate) fn load_table_index(path: &Path) -> Result<TableIndex, LoaderError> {
         }
     }
 
-    Ok(index)
+    Ok(())
 }
 
 /// Look up a WDL value from a table file using a deterministic index key.

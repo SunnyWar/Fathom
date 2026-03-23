@@ -1,7 +1,7 @@
 //! Tablebase probing functionality
 
 use crate::encoding::{encode_position, PositionInput};
-use crate::loader::{load_table_index, probe_dtz_value, probe_wdl_value, TableIndex};
+use crate::loader::{load_table_index, load_table_index_multi, probe_dtz_value, probe_wdl_value, TableIndex};
 use crate::types::*;
 use crate::WdlValue;
 use std::path::Path;
@@ -23,19 +23,31 @@ impl Tablebase {
         }
     }
 
+    /// Initialize the tablebase from the given path.
     ///
-    /// # Arguments
-    ///
-    /// * `path` - Path to the directory containing tablebase files
+    /// `path` may be a single directory or a semicolon-separated (Windows) or
+    /// colon-separated (Unix) list of directories, mirroring the original
+    /// Fathom `tb_init` behaviour.
     ///
     /// # Returns
     ///
     /// `Ok(())` if initialization succeeded, even if no tablebase files were found.
     /// `Err` if initialization failed.
     pub fn init<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
-        let index = load_table_index(path.as_ref()).map_err(|e| e.to_string())?;
-        self.largest.store(index.largest, Ordering::Relaxed);
+        let path_str = path.as_ref().to_string_lossy();
+        let sep = if cfg!(windows) { ';' } else { ':' };
+        let dirs: Vec<&Path> = path_str
+            .split(sep)
+            .map(|s| Path::new(s))
+            .collect();
 
+        let index = if dirs.len() == 1 {
+            load_table_index(dirs[0]).map_err(|e| e.to_string())?
+        } else {
+            load_table_index_multi(&dirs).map_err(|e| e.to_string())?
+        };
+
+        self.largest.store(index.largest, Ordering::Relaxed);
         let mut guard = self
             .index
             .write()
@@ -799,6 +811,25 @@ mod tests {
         assert_eq!(tb.loaded_tables_count(), 2);
 
         std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
+    }
+
+    #[test]
+    fn test_init_multi_path_loads_from_both_dirs() {
+        let dir1 = create_temp_dir();
+        let dir2 = create_temp_dir();
+        std::fs::write(dir1.join("KQvK.rtbw"), b"WDL0payload").expect("wdl file should be created");
+        std::fs::write(dir2.join("KRvK.rtbw"), b"WDL0payload").expect("wdl file should be created");
+
+        let sep = if cfg!(windows) { ";" } else { ":" };
+        let combined = format!("{}{}{}", dir1.display(), sep, dir2.display());
+
+        let tb = Tablebase::new();
+        tb.init(&combined).expect("multi-path init should succeed");
+
+        assert_eq!(tb.loaded_tables_count(), 2);
+
+        std::fs::remove_dir_all(&dir1).expect("temp dir1 should be removed");
+        std::fs::remove_dir_all(&dir2).expect("temp dir2 should be removed");
     }
 
     #[test]
