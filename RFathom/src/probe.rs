@@ -3,7 +3,7 @@
 use crate::encoding::{encode_position, PositionInput};
 use crate::loader::{load_table_index, load_table_index_multi, probe_dtz_value, probe_wdl_value, TableIndex};
 use crate::types::*;
-use crate::WdlValue;
+use crate::{Promotion, WdlValue};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
@@ -246,10 +246,10 @@ impl Tablebase {
         }
 
         let candidates = generate_candidate_root_moves(
-            white, black, kings, queens, rooks, bishops, knights, pawns, turn, 8,
+            white, black, kings, queens, rooks, bishops, knights, pawns, ep, turn, 8,
         );
         let mut moves = RootMoves::new();
-        for (idx, (from_sq, to_sq)) in candidates.iter().enumerate() {
+        for (idx, (from_sq, to_sq, promo)) in candidates.iter().enumerate() {
             let candidate_score = if score > 0 {
                 score.saturating_sub(idx as i32)
             } else if score < 0 {
@@ -257,7 +257,7 @@ impl Tablebase {
             } else {
                 0
             };
-            let candidate = probe.with_from(*from_sq).with_to(*to_sq);
+            let candidate = probe.with_from(*from_sq).with_to(*to_sq).with_promotion(*promo);
             moves.push(make_ranked_root_move(
                 candidate,
                 candidate_score,
@@ -327,15 +327,16 @@ impl Tablebase {
 
         let mut moves = RootMoves::new();
         let candidates = generate_candidate_root_moves(
-            white, black, kings, queens, rooks, bishops, knights, pawns, turn, 8,
+            white, black, kings, queens, rooks, bishops, knights, pawns, ep, turn, 8,
         );
-        for (idx, (from_sq, to_sq)) in candidates.iter().enumerate() {
+        for (idx, (from_sq, to_sq, promo)) in candidates.iter().enumerate() {
             let candidate_score = score.saturating_sub(idx as i32);
             let synthetic = ProbeResult::from_raw(0)
                 .with_wdl(wdl)
                 .with_dtz(0)
                 .with_from(*from_sq)
-                .with_to(*to_sq);
+                .with_to(*to_sq)
+                .with_promotion(*promo);
             moves.push(make_ranked_root_move(
                 synthetic,
                 candidate_score,
@@ -511,13 +512,14 @@ fn generate_candidate_root_moves(
     bishops: Bitboard,
     knights: Bitboard,
     pawns: Bitboard,
+    ep: Square,
     turn: Color,
     limit: usize,
-) -> Vec<(Square, Square)> {
+) -> Vec<(Square, Square, Promotion)> {
     let own = if turn == Color::White { white } else { black };
     let opp = if turn == Color::White { black } else { white };
     let all = white | black;
-    let mut out: Vec<(Square, Square)> = Vec::new();
+    let mut out: Vec<(Square, Square, Promotion)> = Vec::new();
 
     let mut own_kings = own & kings;
     while own_kings != 0 {
@@ -531,7 +533,7 @@ fn generate_candidate_root_moves(
                 }
                 if let Some(to) = offset_square(from, df, dr) {
                     if ((own >> to) & 1) == 0 {
-                        push_candidate(&mut out, (from, to), limit);
+                        push_candidate(&mut out, (from, to, Promotion::None), limit);
                     }
                 }
             }
@@ -621,7 +623,7 @@ fn generate_candidate_root_moves(
         ] {
             if let Some(to) = offset_square(from, df, dr) {
                 if ((own >> to) & 1) == 0 {
-                    push_candidate(&mut out, (from, to), limit);
+                    push_candidate(&mut out, (from, to, Promotion::None), limit);
                 }
             }
         }
@@ -631,20 +633,47 @@ fn generate_candidate_root_moves(
     }
 
     let mut own_pawns = own & pawns;
-    let pawn_step = if turn == Color::White { 1 } else { -1 };
+    // rank index: white starts on rank 1 (index 1), black on rank 6 (index 6)
+    let start_rank: u8 = if turn == Color::White { 1 } else { 6 };
+    let back_rank: u8 = if turn == Color::White { 7 } else { 0 };
+    let pawn_step = if turn == Color::White { 1_i8 } else { -1_i8 };
     while own_pawns != 0 {
         let from = own_pawns.trailing_zeros() as Square;
         own_pawns &= own_pawns - 1;
+        let from_rank = from / 8;
 
+        // Single push
         if let Some(to) = offset_square(from, 0, pawn_step) {
             if ((all >> to) & 1) == 0 {
-                push_candidate(&mut out, (from, to), limit);
+                let promo = if to / 8 == back_rank {
+                    Promotion::Queen
+                } else {
+                    Promotion::None
+                };
+                push_candidate(&mut out, (from, to, promo), limit);
+
+                // Double push from starting rank
+                if from_rank == start_rank {
+                    if let Some(to2) = offset_square(to, 0, pawn_step) {
+                        if ((all >> to2) & 1) == 0 {
+                            push_candidate(&mut out, (from, to2, Promotion::None), limit);
+                        }
+                    }
+                }
             }
         }
-        for df in [-1, 1] {
+
+        // Captures (including en passant)
+        for df in [-1_i8, 1] {
             if let Some(to) = offset_square(from, df, pawn_step) {
-                if ((opp >> to) & 1) != 0 {
-                    push_candidate(&mut out, (from, to), limit);
+                let is_ep = ep != 0 && to == ep;
+                if ((opp >> to) & 1) != 0 || is_ep {
+                    let promo = if to / 8 == back_rank {
+                        Promotion::Queen
+                    } else {
+                        Promotion::None
+                    };
+                    push_candidate(&mut out, (from, to, promo), limit);
                 }
             }
         }
@@ -655,13 +684,14 @@ fn generate_candidate_root_moves(
     }
 
     if out.is_empty() {
-        out.push(synthesize_root_move_squares(white, black, turn));
+        let (fs, ts) = synthesize_root_move_squares(white, black, turn);
+        out.push((fs, ts, Promotion::None));
     }
     out
 }
 
 fn add_slider_moves(
-    out: &mut Vec<(Square, Square)>,
+    out: &mut Vec<(Square, Square, Promotion)>,
     from: Square,
     own: Bitboard,
     opp: Bitboard,
@@ -675,7 +705,7 @@ fn add_slider_moves(
                 break;
             }
 
-            push_candidate(out, (from, to), limit);
+            push_candidate(out, (from, to, Promotion::None), limit);
             if out.len() >= limit {
                 return;
             }
@@ -687,7 +717,11 @@ fn add_slider_moves(
     }
 }
 
-fn push_candidate(out: &mut Vec<(Square, Square)>, candidate: (Square, Square), limit: usize) {
+fn push_candidate(
+    out: &mut Vec<(Square, Square, Promotion)>,
+    candidate: (Square, Square, Promotion),
+    limit: usize,
+) {
     if out.len() >= limit {
         return;
     }
@@ -1083,6 +1117,7 @@ mod tests {
 
     #[test]
     fn test_generate_candidate_root_moves_includes_pawn_push_and_capture() {
+        // White pawn on e2 (sq=12), black piece on f3 (sq=21), white king on e1 (sq=4)
         let white = (1u64 << 4) | (1u64 << 12);
         let black = 1u64 << 21;
         let candidates = generate_candidate_root_moves(
@@ -1094,11 +1129,84 @@ mod tests {
             0,
             0,
             1u64 << 12,
+            0, // no ep
             Color::White,
             16,
         );
 
-        assert!(candidates.contains(&(12, 20)));
-        assert!(candidates.contains(&(12, 21)));
+        assert!(candidates.contains(&(12, 20, Promotion::None)), "single push e2-e3");
+        assert!(candidates.contains(&(12, 28, Promotion::None)), "double push e2-e4");
+        assert!(candidates.contains(&(12, 21, Promotion::None)), "capture e2xf3");
+    }
+
+    #[test]
+    fn test_pawn_double_push_blocked_by_piece_on_rank3() {
+        // White pawn on e2 (sq=12), piece on e3 (sq=20) blocks both pushes
+        let white = (1u64 << 4) | (1u64 << 12) | (1u64 << 20); // own piece on e3
+        let black = 0u64;
+        let candidates = generate_candidate_root_moves(
+            white,
+            black,
+            1u64 << 4,
+            0,
+            0,
+            0,
+            0,
+            1u64 << 12,
+            0,
+            Color::White,
+            16,
+        );
+        assert!(!candidates.contains(&(12, 20, Promotion::None)), "e2-e3 blocked");
+        assert!(!candidates.contains(&(12, 28, Promotion::None)), "e2-e4 also blocked");
+    }
+
+    #[test]
+    fn test_pawn_promotion_on_push() {
+        // White pawn on e7 (sq=52), king on a1(sq=0), nothing blocking e8(sq=60)
+        let white = (1u64 << 0) | (1u64 << 52);
+        let black = 1u64 << 4; // black king on e1
+        let candidates = generate_candidate_root_moves(
+            white,
+            black,
+            (1u64 << 0) | (1u64 << 4),
+            0,
+            0,
+            0,
+            0,
+            1u64 << 52,
+            0,
+            Color::White,
+            16,
+        );
+        assert!(
+            candidates.contains(&(52, 60, Promotion::Queen)),
+            "promotion push should be Queen"
+        );
+    }
+
+    #[test]
+    fn test_en_passant_capture_generated() {
+        // White pawn on e5 (sq=36), black pawn just pushed to d5 (sq=35), ep square = d6 (sq=43)
+        let white = (1u64 << 4) | (1u64 << 36);
+        let black = (1u64 << 60) | (1u64 << 35);
+        let ep: Square = 43; // d6
+        let candidates = generate_candidate_root_moves(
+            white,
+            black,
+            (1u64 << 4) | (1u64 << 60),
+            0,
+            0,
+            0,
+            0,
+            1u64 << 36,
+            ep,
+            Color::White,
+            16,
+        );
+        assert!(
+            candidates.contains(&(36, 43, Promotion::None)),
+            "en passant e5xd6 should be generated"
+        );
     }
 }
