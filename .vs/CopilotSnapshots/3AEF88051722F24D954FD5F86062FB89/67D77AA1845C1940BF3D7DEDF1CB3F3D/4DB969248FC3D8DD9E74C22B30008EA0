@@ -1,0 +1,316 @@
+﻿//! Tablebase probing functionality
+
+use crate::types::*;
+use crate::constants::castling;
+use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// Main tablebase interface
+pub struct Tablebase {
+    largest: AtomicUsize,
+}
+
+impl Tablebase {
+    /// Create a new tablebase instance
+    pub fn new() -> Self {
+        Tablebase {
+            largest: AtomicUsize::new(0),
+        }
+    }
+
+    /// Initialize the tablebase from the given path
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the directory containing tablebase files
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if initialization succeeded, even if no tablebase files were found.
+    /// `Err` if initialization failed.
+    pub fn init<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
+        // TODO: Implement actual initialization
+        // For now, this is a stub
+        let _path = path.as_ref();
+        self.largest.store(0, Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// Get the largest tablebase available
+    ///
+    /// Returns the maximum number of pieces for which tablebases are available.
+    /// Returns 0 if no tablebases are loaded.
+    pub fn largest(&self) -> usize {
+        self.largest.load(Ordering::Relaxed)
+    }
+
+    /// Free any resources allocated by the tablebase
+    pub fn free(&self) {
+        // TODO: Implement cleanup
+        self.largest.store(0, Ordering::Relaxed);
+    }
+
+    /// Probe the Win-Draw-Loss (WDL) table
+    ///
+    /// # Arguments
+    ///
+    /// * `white` - Bitboard of white pieces
+    /// * `black` - Bitboard of black pieces
+    /// * `kings` - Bitboard of kings
+    /// * `queens` - Bitboard of queens
+    /// * `rooks` - Bitboard of rooks
+    /// * `bishops` - Bitboard of bishops
+    /// * `knights` - Bitboard of knights
+    /// * `pawns` - Bitboard of pawns
+    /// * `rule50` - 50-move half-move clock
+    /// * `castling` - Castling rights (use castling module constants)
+    /// * `ep` - En passant square (0 if none)
+    /// * `turn` - Side to move (White or Black)
+    ///
+    /// # Returns
+    ///
+    /// `Some(WdlValue)` if the probe succeeded, `None` if it failed.
+    ///
+    /// # Notes
+    ///
+    /// - This function is thread-safe
+    /// - Returns `None` if castling rights exist or rule50 counter is non-zero
+    /// - Engines should use this during search
+    #[allow(clippy::too_many_arguments)]
+    pub fn probe_wdl(
+        &self,
+        white: Bitboard,
+        black: Bitboard,
+        kings: Bitboard,
+        queens: Bitboard,
+        rooks: Bitboard,
+        bishops: Bitboard,
+        knights: Bitboard,
+        pawns: Bitboard,
+        rule50: u32,
+        castling_rights: u32,
+        ep: Square,
+        turn: Color,
+    ) -> Option<WdlValue> {
+        if castling_rights != 0 {
+            return None;
+        }
+        if rule50 != 0 {
+            return None;
+        }
+
+        self.probe_wdl_impl(white, black, kings, queens, rooks, bishops, knights, pawns, ep, turn)
+    }
+
+    /// Probe the Distance-To-Zero (DTZ) table
+    ///
+    /// # Arguments
+    ///
+    /// Same as `probe_wdl`, plus:
+    /// * `results` - If `Some`, will be filled with results for all legal moves
+    ///
+    /// # Returns
+    ///
+    /// A `ProbeResult` containing:
+    /// - WDL value
+    /// - Suggested move (from, to, promotion, en passant flag)
+    /// - DTZ value
+    ///
+    /// Or special values:
+    /// - `ProbeResult::CHECKMATE` if the position is checkmate
+    /// - `ProbeResult::STALEMATE` if the position is stalemate
+    /// - `ProbeResult::FAILED` if the probe failed
+    ///
+    /// # Notes
+    ///
+    /// - This function is NOT thread-safe
+    /// - Should only be called at the root of the search
+    /// - DTZ tablebases can suggest unnatural moves for losing positions
+    #[allow(clippy::too_many_arguments)]
+    pub fn probe_root(
+        &self,
+        white: Bitboard,
+        black: Bitboard,
+        kings: Bitboard,
+        queens: Bitboard,
+        rooks: Bitboard,
+        bishops: Bitboard,
+        knights: Bitboard,
+        pawns: Bitboard,
+        rule50: u32,
+        castling_rights: u32,
+        ep: Square,
+        turn: Color,
+        results: Option<&mut Vec<ProbeResult>>,
+    ) -> ProbeResult {
+        if castling_rights != 0 {
+            return ProbeResult::FAILED;
+        }
+
+        self.probe_root_impl(
+            white, black, kings, queens, rooks, bishops, knights, pawns,
+            rule50, ep, turn, results
+        )
+    }
+
+    /// Probe root position using DTZ tables and return ranked moves
+    ///
+    /// # Arguments
+    ///
+    /// Same as `probe_root`, plus:
+    /// * `has_repeated` - Whether there has been a repetition
+    /// * `use_rule50` - Whether to use the 50-move rule
+    ///
+    /// # Returns
+    ///
+    /// `Some(RootMoves)` with ranked moves and PVs, or `None` if probe failed.
+    #[allow(clippy::too_many_arguments)]
+    pub fn probe_root_dtz(
+        &self,
+        white: Bitboard,
+        black: Bitboard,
+        kings: Bitboard,
+        queens: Bitboard,
+        rooks: Bitboard,
+        bishops: Bitboard,
+        knights: Bitboard,
+        pawns: Bitboard,
+        rule50: u32,
+        castling_rights: u32,
+        ep: Square,
+        turn: Color,
+        has_repeated: bool,
+        use_rule50: bool,
+    ) -> Option<RootMoves> {
+        if castling_rights != 0 {
+            return None;
+        }
+
+        // TODO: Implement actual DTZ probing
+        let _ = (white, black, kings, queens, rooks, bishops, knights, pawns);
+        let _ = (rule50, ep, turn, has_repeated, use_rule50);
+        Some(RootMoves::new())
+    }
+
+    /// Probe root position using WDL tables and return ranked moves
+    ///
+    /// This is a fallback when DTZ tables are missing.
+    ///
+    /// # Returns
+    ///
+    /// `Some(RootMoves)` with ranked moves and PVs, or `None` if probe failed.
+    #[allow(clippy::too_many_arguments)]
+    pub fn probe_root_wdl(
+        &self,
+        white: Bitboard,
+        black: Bitboard,
+        kings: Bitboard,
+        queens: Bitboard,
+        rooks: Bitboard,
+        bishops: Bitboard,
+        knights: Bitboard,
+        pawns: Bitboard,
+        rule50: u32,
+        castling_rights: u32,
+        ep: Square,
+        turn: Color,
+        use_rule50: bool,
+    ) -> Option<RootMoves> {
+        if castling_rights != 0 {
+            return None;
+        }
+
+        // TODO: Implement actual WDL probing
+        let _ = (white, black, kings, queens, rooks, bishops, knights, pawns);
+        let _ = (rule50, ep, turn, use_rule50);
+        Some(RootMoves::new())
+    }
+
+    // Internal implementation stubs
+    #[allow(clippy::too_many_arguments)]
+    fn probe_wdl_impl(
+        &self,
+        _white: Bitboard,
+        _black: Bitboard,
+        _kings: Bitboard,
+        _queens: Bitboard,
+        _rooks: Bitboard,
+        _bishops: Bitboard,
+        _knights: Bitboard,
+        _pawns: Bitboard,
+        _ep: Square,
+        _turn: Color,
+    ) -> Option<WdlValue> {
+        // TODO: Implement actual WDL probing
+        None
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn probe_root_impl(
+        &self,
+        _white: Bitboard,
+        _black: Bitboard,
+        _kings: Bitboard,
+        _queens: Bitboard,
+        _rooks: Bitboard,
+        _bishops: Bitboard,
+        _knights: Bitboard,
+        _pawns: Bitboard,
+        _rule50: u32,
+        _ep: Square,
+        _turn: Color,
+        _results: Option<&mut Vec<ProbeResult>>,
+    ) -> ProbeResult {
+        // TODO: Implement actual root probing
+        ProbeResult::FAILED
+    }
+}
+
+impl Default for Tablebase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for Tablebase {
+    fn drop(&mut self) {
+        self.free();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tablebase_creation() {
+        let tb = Tablebase::new();
+        assert_eq!(tb.largest(), 0);
+    }
+
+    #[test]
+    fn test_probe_wdl_rejects_castling() {
+        let tb = Tablebase::new();
+        let result = tb.probe_wdl(
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0,
+            castling::WHITE_KING_SIDE,
+            0,
+            Color::White,
+        );
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_probe_wdl_rejects_rule50() {
+        let tb = Tablebase::new();
+        let result = tb.probe_wdl(
+            0, 0, 0, 0, 0, 0, 0, 0,
+            1,
+            0,
+            0,
+            Color::White,
+        );
+        assert!(result.is_none());
+    }
+}

@@ -1,0 +1,349 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\Fathom\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\src\\bitboard.rs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\src\\bitboard.rs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\Cargo.toml||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\Cargo.toml||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\src\\tbprobe.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\tbprobe.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\src\\lib.rs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\src\\lib.rs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\src\\constants.rs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\src\\constants.rs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\src\\types.rs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\src\\types.rs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\src\\probe.rs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\src\\probe.rs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\src\\helper.rs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\src\\helper.rs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\README.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\README.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\examples\\basic.rs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\examples\\basic.rs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\examples\\helper_api.rs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\examples\\helper_api.rs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\.gitignore||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\.gitignore||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\C_TO_RUST_MAPPING.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\C_TO_RUST_MAPPING.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\PROJECT_STRUCTURE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\PROJECT_STRUCTURE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Fathom\\RFathom\\STATUS.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RFathom\\STATUS.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 1,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedHeight": 91,
+          "SelectedChildIndex": 9,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{0ad07096-bba9-4900-a651-0598d26f6d24}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{da1e233c-cfa8-5021-b06c-abc3d02f44e8}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:130:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:3:0:{34c7837f-3b3a-449c-bdf0-bdad86cbaf4a}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:2:0:{34c7837f-3b3a-449c-bdf0-bdad86cbaf4a}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "tbprobe.h",
+              "DocumentMoniker": "D:\\Fathom\\src\\tbprobe.h",
+              "RelativeDocumentMoniker": "src\\tbprobe.h",
+              "ToolTip": "D:\\Fathom\\src\\tbprobe.h",
+              "RelativeToolTip": "src\\tbprobe.h",
+              "ViewState": "AgIAAI8BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2026-03-09T23:46:14.51Z",
+              "EditorCaption": ""
+            }
+          ]
+        },
+        {
+          "DockedHeight": 439,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "C_TO_RUST_MAPPING.md",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\C_TO_RUST_MAPPING.md",
+              "RelativeDocumentMoniker": "RFathom\\C_TO_RUST_MAPPING.md",
+              "ToolTip": "D:\\Fathom\\RFathom\\C_TO_RUST_MAPPING.md",
+              "RelativeToolTip": "RFathom\\C_TO_RUST_MAPPING.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAJYBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-03-09T23:58:27.155Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "bitboard.rs",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\src\\bitboard.rs",
+              "RelativeDocumentMoniker": "RFathom\\src\\bitboard.rs",
+              "ToolTip": "D:\\Fathom\\RFathom\\src\\bitboard.rs",
+              "RelativeToolTip": "RFathom\\src\\bitboard.rs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAADcAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-09T23:53:37.152Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "types.rs",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\src\\types.rs",
+              "RelativeDocumentMoniker": "RFathom\\src\\types.rs",
+              "ToolTip": "D:\\Fathom\\RFathom\\src\\types.rs",
+              "RelativeToolTip": "RFathom\\src\\types.rs",
+              "ViewState": "AgIAAOMAAAAAAAAAAABBwAABAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-09T23:53:29.703Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "constants.rs",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\src\\constants.rs",
+              "RelativeDocumentMoniker": "RFathom\\src\\constants.rs",
+              "ToolTip": "D:\\Fathom\\RFathom\\src\\constants.rs",
+              "RelativeToolTip": "RFathom\\src\\constants.rs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAFoAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-09T23:53:06.685Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "lib.rs",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\src\\lib.rs",
+              "RelativeDocumentMoniker": "RFathom\\src\\lib.rs",
+              "ToolTip": "D:\\Fathom\\RFathom\\src\\lib.rs",
+              "RelativeToolTip": "RFathom\\src\\lib.rs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-09T23:52:55.134Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Cargo.toml",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\Cargo.toml",
+              "RelativeDocumentMoniker": "RFathom\\Cargo.toml",
+              "ToolTip": "D:\\Fathom\\RFathom\\Cargo.toml",
+              "RelativeToolTip": "RFathom\\Cargo.toml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-09T23:52:48.2Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:1:0:{d212f56b-c48a-434c-a121-1c5d80b59b9f}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "STATUS.md",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\STATUS.md",
+              "RelativeDocumentMoniker": "RFathom\\STATUS.md",
+              "ToolTip": "D:\\Fathom\\RFathom\\STATUS.md",
+              "RelativeToolTip": "RFathom\\STATUS.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAANMAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-03-10T00:00:53.695Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "PROJECT_STRUCTURE.md",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\PROJECT_STRUCTURE.md",
+              "RelativeDocumentMoniker": "RFathom\\PROJECT_STRUCTURE.md",
+              "ToolTip": "D:\\Fathom\\RFathom\\PROJECT_STRUCTURE.md",
+              "RelativeToolTip": "RFathom\\PROJECT_STRUCTURE.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAMIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-03-09T23:59:59.773Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": ".gitignore",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\.gitignore",
+              "RelativeDocumentMoniker": "RFathom\\.gitignore",
+              "ToolTip": "D:\\Fathom\\RFathom\\.gitignore",
+              "RelativeToolTip": "RFathom\\.gitignore",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABcAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-09T23:55:12.929Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "helper_api.rs",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\examples\\helper_api.rs",
+              "RelativeDocumentMoniker": "RFathom\\examples\\helper_api.rs",
+              "ToolTip": "D:\\Fathom\\RFathom\\examples\\helper_api.rs",
+              "RelativeToolTip": "RFathom\\examples\\helper_api.rs",
+              "ViewState": "AgIAABUAAAAAAAAAAABBwFUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-09T23:55:07.644Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "basic.rs",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\examples\\basic.rs",
+              "RelativeDocumentMoniker": "RFathom\\examples\\basic.rs",
+              "ToolTip": "D:\\Fathom\\RFathom\\examples\\basic.rs",
+              "RelativeToolTip": "RFathom\\examples\\basic.rs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAIIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-09T23:54:55.631Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "README.md",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\README.md",
+              "RelativeDocumentMoniker": "RFathom\\README.md",
+              "ToolTip": "D:\\Fathom\\RFathom\\README.md",
+              "RelativeToolTip": "RFathom\\README.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAMUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-03-09T23:54:38.329Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "helper.rs",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\src\\helper.rs",
+              "RelativeDocumentMoniker": "RFathom\\src\\helper.rs",
+              "ToolTip": "D:\\Fathom\\RFathom\\src\\helper.rs",
+              "RelativeToolTip": "RFathom\\src\\helper.rs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAFMAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-09T23:54:13.205Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "probe.rs",
+              "DocumentMoniker": "D:\\Fathom\\RFathom\\src\\probe.rs",
+              "RelativeDocumentMoniker": "RFathom\\src\\probe.rs",
+              "ToolTip": "D:\\Fathom\\RFathom\\src\\probe.rs",
+              "RelativeToolTip": "RFathom\\src\\probe.rs",
+              "ViewState": "AgIAABsBAAAAAAAAAABBwD0BAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-09T23:54:03.579Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{5a4e9529-b6a0-46b5-be4f-0f0b239bc0eb}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:2:0:{d212f56b-c48a-434c-a121-1c5d80b59b9f}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{ebac7c74-3b95-5b1e-b483-338a08cbadf2}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{d820ab17-251c-5a71-94e2-6aa5bc339a8d}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{7615f12e-922a-545a-b9a0-3305b93d08c0}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{34e76e81-ee4a-11d0-ae2e-00a0c90fffc3}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{d78612c7-9962-4b83-95d9-268046dad23a}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
