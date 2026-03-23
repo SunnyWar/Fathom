@@ -6,6 +6,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use crate::syzygy::{parse_material_key, TableMeta};
 use crate::WdlValue;
 
 /// Tablebase file kind.
@@ -39,6 +40,7 @@ pub(crate) struct MaterialTables {
     pub(crate) wdl: Option<PathBuf>,
     pub(crate) dtz: Option<PathBuf>,
     pub(crate) piece_count: usize,
+    pub(crate) meta: Option<TableMeta>,
 }
 
 /// Discovered tablebase index.
@@ -256,8 +258,11 @@ fn load_into_index(path: &Path, index: &mut TableIndex) -> Result<(), LoaderErro
         };
         index.files.push(table_file.clone());
 
-        let slot = index.by_material.entry(material).or_default();
+        let slot = index.by_material.entry(material.clone()).or_default();
         slot.piece_count = slot.piece_count.max(piece_count);
+        if slot.meta.is_none() {
+            slot.meta = parse_material_key(&material);
+        }
         match kind {
             TableKind::Wdl => slot.wdl = Some(table_file.path),
             TableKind::Dtz => slot.dtz = Some(table_file.path),

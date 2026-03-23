@@ -2,8 +2,10 @@
 
 use crate::encoding::{encode_position, PositionInput};
 use crate::loader::{load_table_index, load_table_index_multi, probe_dtz_value, probe_wdl_value, TableIndex};
+use crate::syzygy::{probe_dtz_syzygy, probe_wdl_syzygy, WDL_MAGIC, DTZ_MAGIC};
 use crate::types::*;
 use crate::{Promotion, WdlValue};
+use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
@@ -392,13 +394,16 @@ impl Tablebase {
             .get(&encoded.material_key.to_ascii_lowercase())?;
         let wdl_path = tables.wdl.as_ref()?;
 
-        let wdl = probe_wdl_value(wdl_path, encoded.key).ok().flatten()?;
+        // Try real Syzygy format first; fall back to simplified test format
+        let wdl = try_probe_wdl_real(
+            wdl_path, tables.meta.as_ref(),
+            encoded.color_flipped,
+            turn == crate::Color::White,
+            white, black, kings, queens, rooks, bishops, knights, pawns,
+        )
+        .or_else(|| probe_wdl_value(wdl_path, encoded.key).ok().flatten())?;
 
-        Some(if encoded.color_flipped {
-            flip_wdl(wdl)
-        } else {
-            wdl
-        })
+        Some(if encoded.color_flipped { flip_wdl(wdl) } else { wdl })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -453,18 +458,48 @@ impl Tablebase {
             None => return ProbeResult::FAILED,
         };
 
-        let dtz = match probe_dtz_value(dtz_path, encoded.key) {
-            Ok(v) => v,
-            Err(_) => return ProbeResult::FAILED,
+        // Try real Syzygy DTZ format first; fall back to simplified format
+        let wdl_for_dtz = {
+            // Quick WDL probe for DTZ map parameter
+            tables.wdl.as_ref().and_then(|wp| {
+                try_probe_wdl_real(
+                    wp, tables.meta.as_ref(),
+                    encoded.color_flipped, turn == crate::Color::White,
+                    white, black, kings, queens, rooks, bishops, knights, pawns,
+                )
+            })
         };
-        let dtz = if encoded.color_flipped { -dtz } else { dtz };
+        let wdl_int = match wdl_for_dtz {
+            Some(WdlValue::Loss)        => -2,
+            Some(WdlValue::BlessedLoss) => -1,
+            Some(WdlValue::Draw)        =>  0,
+            Some(WdlValue::CursedWin)   =>  1,
+            Some(WdlValue::Win)         =>  2,
+            None => 0,
+        };
+
+        let dtz = try_probe_dtz_real(
+            dtz_path, tables.meta.as_ref(),
+            encoded.color_flipped, turn == crate::Color::White,
+            wdl_int,
+            white, black, kings, queens, rooks, bishops, knights, pawns,
+        )
+        .or_else(|| probe_dtz_value(dtz_path, encoded.key).ok());
+
+        let dtz = match dtz {
+            Some(v) => if encoded.color_flipped { -v } else { v },
+            None => return ProbeResult::FAILED,
+        };
 
         let wdl = match tables.wdl.as_ref() {
             Some(wdl_path) => {
-                let raw = probe_wdl_value(wdl_path, encoded.key)
-                    .ok()
-                    .flatten()
-                    .unwrap_or_else(|| wdl_from_dtz(dtz));
+                let raw = try_probe_wdl_real(
+                    wdl_path, tables.meta.as_ref(),
+                    encoded.color_flipped, turn == crate::Color::White,
+                    white, black, kings, queens, rooks, bishops, knights, pawns,
+                )
+                .or_else(|| probe_wdl_value(wdl_path, encoded.key).ok().flatten())
+                .unwrap_or_else(|| wdl_from_dtz(dtz));
                 if encoded.color_flipped { flip_wdl(raw) } else { raw }
             }
             None => wdl_from_dtz(dtz),
@@ -481,6 +516,46 @@ impl Tablebase {
         }
         result
     }
+}
+
+/// Try to probe WDL using the real Syzygy binary format.
+/// Returns `None` if the file doesn't have the real magic or decoding fails.
+#[allow(clippy::too_many_arguments)]
+fn try_probe_wdl_real(
+    path: &std::path::Path,
+    meta: Option<&crate::syzygy::TableMeta>,
+    color_flipped: bool,
+    turn_is_white: bool,
+    white: u64, black: u64,
+    kings: u64, queens: u64, rooks: u64, bishops: u64, knights: u64, pawns: u64,
+) -> Option<WdlValue> {
+    let meta = meta?;
+    let data = fs::read(path).ok()?;
+    if data.len() < 4 { return None; }
+    let magic = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+    if magic != WDL_MAGIC { return None; }
+    probe_wdl_syzygy(&data, meta, color_flipped, turn_is_white,
+        white, black, kings, queens, rooks, bishops, knights, pawns)
+}
+
+/// Try to probe DTZ using the real Syzygy binary format.
+#[allow(clippy::too_many_arguments)]
+fn try_probe_dtz_real(
+    path: &std::path::Path,
+    meta: Option<&crate::syzygy::TableMeta>,
+    color_flipped: bool,
+    turn_is_white: bool,
+    wdl: i32,
+    white: u64, black: u64,
+    kings: u64, queens: u64, rooks: u64, bishops: u64, knights: u64, pawns: u64,
+) -> Option<i32> {
+    let meta = meta?;
+    let data = fs::read(path).ok()?;
+    if data.len() < 4 { return None; }
+    let magic = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+    if magic != DTZ_MAGIC { return None; }
+    probe_dtz_syzygy(&data, meta, color_flipped, turn_is_white, wdl,
+        white, black, kings, queens, rooks, bishops, knights, pawns)
 }
 
 fn synthesize_root_move_squares(white: Bitboard, black: Bitboard, turn: Color) -> (Square, Square) {
