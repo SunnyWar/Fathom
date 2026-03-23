@@ -379,7 +379,13 @@ impl Tablebase {
             .get(&encoded.material_key.to_ascii_lowercase())?;
         let wdl_path = tables.wdl.as_ref()?;
 
-        probe_wdl_value(wdl_path, encoded.key).ok().flatten()
+        let wdl = probe_wdl_value(wdl_path, encoded.key).ok().flatten()?;
+
+        Some(if encoded.color_flipped {
+            flip_wdl(wdl)
+        } else {
+            wdl
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -438,29 +444,17 @@ impl Tablebase {
             Ok(v) => v,
             Err(_) => return ProbeResult::FAILED,
         };
+        let dtz = if encoded.color_flipped { -dtz } else { dtz };
 
         let wdl = match tables.wdl.as_ref() {
-            Some(wdl_path) => probe_wdl_value(wdl_path, encoded.key)
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    if dtz > 0 {
-                        WdlValue::Win
-                    } else if dtz < 0 {
-                        WdlValue::Loss
-                    } else {
-                        WdlValue::Draw
-                    }
-                }),
-            None => {
-                if dtz > 0 {
-                    WdlValue::Win
-                } else if dtz < 0 {
-                    WdlValue::Loss
-                } else {
-                    WdlValue::Draw
-                }
+            Some(wdl_path) => {
+                let raw = probe_wdl_value(wdl_path, encoded.key)
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| wdl_from_dtz(dtz));
+                if encoded.color_flipped { flip_wdl(raw) } else { raw }
             }
+            None => wdl_from_dtz(dtz),
         };
 
         let (from_sq, to_sq) = synthesize_root_move_squares(white, black, turn);
@@ -567,7 +561,14 @@ fn generate_candidate_root_moves(
         let from = own_rooks.trailing_zeros() as Square;
         own_rooks &= own_rooks - 1;
 
-        add_slider_moves(&mut out, from, own, opp, &[(0, 1), (0, -1), (1, 0), (-1, 0)], limit);
+        add_slider_moves(
+            &mut out,
+            from,
+            own,
+            opp,
+            &[(0, 1), (0, -1), (1, 0), (-1, 0)],
+            limit,
+        );
         if out.len() >= limit {
             return out;
         }
@@ -701,6 +702,26 @@ fn make_ranked_root_move(probe: ProbeResult, score: i32, rank: i32) -> RootMove 
     root.tb_rank = rank;
     root.pv.push(mv);
     root
+}
+
+fn flip_wdl(wdl: WdlValue) -> WdlValue {
+    match wdl {
+        WdlValue::Win => WdlValue::Loss,
+        WdlValue::CursedWin => WdlValue::BlessedLoss,
+        WdlValue::Draw => WdlValue::Draw,
+        WdlValue::BlessedLoss => WdlValue::CursedWin,
+        WdlValue::Loss => WdlValue::Win,
+    }
+}
+
+fn wdl_from_dtz(dtz: i32) -> WdlValue {
+    if dtz > 0 {
+        WdlValue::Win
+    } else if dtz < 0 {
+        WdlValue::Loss
+    } else {
+        WdlValue::Draw
+    }
 }
 
 impl Default for Tablebase {
@@ -1033,8 +1054,18 @@ mod tests {
     fn test_generate_candidate_root_moves_includes_pawn_push_and_capture() {
         let white = (1u64 << 4) | (1u64 << 12);
         let black = 1u64 << 21;
-        let candidates =
-            generate_candidate_root_moves(white, black, 1u64 << 4, 0, 0, 0, 0, 1u64 << 12, Color::White, 16);
+        let candidates = generate_candidate_root_moves(
+            white,
+            black,
+            1u64 << 4,
+            0,
+            0,
+            0,
+            0,
+            1u64 << 12,
+            Color::White,
+            16,
+        );
 
         assert!(candidates.contains(&(12, 20)));
         assert!(candidates.contains(&(12, 21)));
