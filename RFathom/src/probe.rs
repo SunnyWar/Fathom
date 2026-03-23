@@ -233,7 +233,9 @@ impl Tablebase {
             score = score.saturating_mul(2);
         }
 
-        let candidates = generate_candidate_root_moves(white, black, kings, turn, 8);
+        let candidates = generate_candidate_root_moves(
+            white, black, kings, queens, rooks, bishops, knights, pawns, turn, 8,
+        );
         let mut moves = RootMoves::new();
         for (idx, (from_sq, to_sq)) in candidates.iter().enumerate() {
             let candidate_score = if score > 0 {
@@ -312,7 +314,9 @@ impl Tablebase {
         }
 
         let mut moves = RootMoves::new();
-        let candidates = generate_candidate_root_moves(white, black, kings, turn, 8);
+        let candidates = generate_candidate_root_moves(
+            white, black, kings, queens, rooks, bishops, knights, pawns, turn, 8,
+        );
         for (idx, (from_sq, to_sq)) in candidates.iter().enumerate() {
             let candidate_score = score.saturating_sub(idx as i32);
             let synthetic = ProbeResult::from_raw(0)
@@ -496,46 +500,144 @@ fn generate_candidate_root_moves(
     white: Bitboard,
     black: Bitboard,
     kings: Bitboard,
+    queens: Bitboard,
+    rooks: Bitboard,
+    bishops: Bitboard,
+    knights: Bitboard,
+    pawns: Bitboard,
     turn: Color,
     limit: usize,
 ) -> Vec<(Square, Square)> {
     let own = if turn == Color::White { white } else { black };
+    let opp = if turn == Color::White { black } else { white };
+    let all = white | black;
     let mut out: Vec<(Square, Square)> = Vec::new();
 
-    let own_king = own & kings;
-    if own_king != 0 {
-        let king_sq = own_king.trailing_zeros() as Square;
+    let mut own_kings = own & kings;
+    while own_kings != 0 {
+        let from = own_kings.trailing_zeros() as Square;
+        own_kings &= own_kings - 1;
+
         for dr in -1..=1 {
             for df in -1..=1 {
                 if df == 0 && dr == 0 {
                     continue;
                 }
-                if let Some(to) = offset_square(king_sq, df, dr) {
+                if let Some(to) = offset_square(from, df, dr) {
                     if ((own >> to) & 1) == 0 {
-                        push_candidate(&mut out, (king_sq, to), limit);
+                        push_candidate(&mut out, (from, to), limit);
                     }
                 }
             }
         }
+        if out.len() >= limit {
+            return out;
+        }
     }
 
-    let mut others = own & !kings;
-    while others != 0 {
-        let from = others.trailing_zeros() as Square;
-        others &= others - 1;
+    let mut own_queens = own & queens;
+    while own_queens != 0 {
+        let from = own_queens.trailing_zeros() as Square;
+        own_queens &= own_queens - 1;
 
-        let forward = if turn == Color::White { 1 } else { -1 };
-        let steps = [(0, forward), (1, 0), (-1, 0), (1, forward), (-1, forward)];
-        for (df, dr) in steps {
+        add_slider_moves(
+            &mut out,
+            from,
+            own,
+            opp,
+            &[
+                (0, 1),
+                (0, -1),
+                (1, 0),
+                (-1, 0),
+                (1, 1),
+                (-1, 1),
+                (1, -1),
+                (-1, -1),
+            ],
+            limit,
+        );
+        if out.len() >= limit {
+            return out;
+        }
+    }
+
+    let mut own_rooks = own & rooks;
+    while own_rooks != 0 {
+        let from = own_rooks.trailing_zeros() as Square;
+        own_rooks &= own_rooks - 1;
+
+        add_slider_moves(&mut out, from, own, opp, &[(0, 1), (0, -1), (1, 0), (-1, 0)], limit);
+        if out.len() >= limit {
+            return out;
+        }
+    }
+
+    let mut own_bishops = own & bishops;
+    while own_bishops != 0 {
+        let from = own_bishops.trailing_zeros() as Square;
+        own_bishops &= own_bishops - 1;
+
+        add_slider_moves(
+            &mut out,
+            from,
+            own,
+            opp,
+            &[(1, 1), (-1, 1), (1, -1), (-1, -1)],
+            limit,
+        );
+        if out.len() >= limit {
+            return out;
+        }
+    }
+
+    let mut own_knights = own & knights;
+    while own_knights != 0 {
+        let from = own_knights.trailing_zeros() as Square;
+        own_knights &= own_knights - 1;
+
+        for (df, dr) in [
+            (-2, -1),
+            (-2, 1),
+            (-1, -2),
+            (-1, 2),
+            (1, -2),
+            (1, 2),
+            (2, -1),
+            (2, 1),
+        ] {
             if let Some(to) = offset_square(from, df, dr) {
                 if ((own >> to) & 1) == 0 {
                     push_candidate(&mut out, (from, to), limit);
                 }
             }
         }
+        if out.len() >= limit {
+            return out;
+        }
+    }
+
+    let mut own_pawns = own & pawns;
+    let pawn_step = if turn == Color::White { 1 } else { -1 };
+    while own_pawns != 0 {
+        let from = own_pawns.trailing_zeros() as Square;
+        own_pawns &= own_pawns - 1;
+
+        if let Some(to) = offset_square(from, 0, pawn_step) {
+            if ((all >> to) & 1) == 0 {
+                push_candidate(&mut out, (from, to), limit);
+            }
+        }
+        for df in [-1, 1] {
+            if let Some(to) = offset_square(from, df, pawn_step) {
+                if ((opp >> to) & 1) != 0 {
+                    push_candidate(&mut out, (from, to), limit);
+                }
+            }
+        }
 
         if out.len() >= limit {
-            break;
+            return out;
         }
     }
 
@@ -543,6 +645,33 @@ fn generate_candidate_root_moves(
         out.push(synthesize_root_move_squares(white, black, turn));
     }
     out
+}
+
+fn add_slider_moves(
+    out: &mut Vec<(Square, Square)>,
+    from: Square,
+    own: Bitboard,
+    opp: Bitboard,
+    directions: &[(i8, i8)],
+    limit: usize,
+) {
+    for &(df, dr) in directions {
+        let mut cur = from;
+        while let Some(to) = offset_square(cur, df, dr) {
+            if ((own >> to) & 1) != 0 {
+                break;
+            }
+
+            push_candidate(out, (from, to), limit);
+            if out.len() >= limit {
+                return;
+            }
+            if ((opp >> to) & 1) != 0 {
+                break;
+            }
+            cur = to;
+        }
+    }
 }
 
 fn push_candidate(out: &mut Vec<(Square, Square)>, candidate: (Square, Square), limit: usize) {
@@ -898,5 +1027,16 @@ mod tests {
         }
 
         std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
+    }
+
+    #[test]
+    fn test_generate_candidate_root_moves_includes_pawn_push_and_capture() {
+        let white = (1u64 << 4) | (1u64 << 12);
+        let black = 1u64 << 21;
+        let candidates =
+            generate_candidate_root_moves(white, black, 1u64 << 4, 0, 0, 0, 0, 1u64 << 12, Color::White, 16);
+
+        assert!(candidates.contains(&(12, 20)));
+        assert!(candidates.contains(&(12, 21)));
     }
 }
