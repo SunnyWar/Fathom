@@ -1299,7 +1299,7 @@ pub(crate) fn probe_dtz_syzygy(
     // ── Phase 2: parse PairsData headers ──────────────────────────────────────
     let mut pd_vec: Vec<PairsData> = Vec::new();
     let mut flags_vec: Vec<u8> = Vec::new();
-    for &(ref ei, tb_size) in ei_vec.iter().take(num_tables) {
+    for &(ref _ei, tb_size) in ei_vec.iter().take(num_tables) {
         let (pd, next, flags) = setup_pairs(data, data_off, tb_size, false).ok()?;
         data_off = next;
         pd_vec.push(pd);
@@ -1343,9 +1343,9 @@ pub(crate) fn probe_dtz_syzygy(
     }
 
     // ── Phase 4: assign index / size / data byte-offsets ──────────────────────
-    for t in 0..num_tables {
-        pd_vec[t].index_table_off = data_off;
-        data_off += pd_vec[t].idx_table_size;
+    for pd in pd_vec.iter_mut().take(num_tables) {
+        pd.index_table_off = data_off;
+        data_off += pd.idx_table_size;
     }
     for pd in pd_vec.iter_mut().take(num_tables) {
         pd.size_table_off = data_off;
