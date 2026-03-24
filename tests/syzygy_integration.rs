@@ -24,8 +24,11 @@ fn kbnvk_white_wins() {
 
 /// KNNvKP — king and two knights vs king and pawn (Troitzky line)
 /// FEN: 8/8/8/8/8/n2k4/n7/2K1P3 b - - 0 1
+///
+/// According to Syzygy tablebases, this position is a LOSS for Black (side with pawn),
+/// because two knights cannot force mate against a lone king and pawn except in rare cases.
 #[test]
-fn knnvkp_black_wins() {
+fn knnvkp_black_loses() {
     let Some(tb) = try_load() else { return };
 
     // White: Kc1 (2,0), Na3 (0,2), Nb1 (1,0), Pe2 (4,1); Black: Kd3 (3,2)
@@ -38,7 +41,7 @@ fn knnvkp_black_wins() {
     let black = bk;
     let kings = wk | bk;
 
-    // Black to move, expect Win for Black (WDL = 2 for Black)
+    // Black to move, expect Loss for Black (WDL = 0 for Black)
     let result = tb.probe_wdl(
         white,
         black,
@@ -56,8 +59,8 @@ fn knnvkp_black_wins() {
     assert!(result.is_some(), "KNNvKP probe returned None");
     assert_eq!(
         result.unwrap(),
-        WdlValue::Win,
-        "KNNvKP should be Win for black"
+        WdlValue::Loss,
+        "KNNvKP should be Loss for black per Syzygy tablebase"
     );
 }
 
