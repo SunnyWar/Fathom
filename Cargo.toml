@@ -1,0 +1,24 @@
+[package]
+name = "rfathom"
+version = "0.1.0"
+edition = "2021"
+authors = ["RFathom Contributors"]
+license = "MIT"
+description = "A Rust implementation of Syzygy tablebase probing (Fathom port)"
+repository = "https://github.com/SunnyWar/Fathom"
+keywords = ["chess", "tablebase", "syzygy", "endgame"]
+categories = ["games"]
+
+[dependencies]
+memmap2 = "0.9"
+
+[dev-dependencies]
+criterion = "0.4"
+
+[features]
+default = ["helper-api"]
+helper-api = []
+
+[lib]
+name = "rfathom"
+path = "src/lib.rs"
