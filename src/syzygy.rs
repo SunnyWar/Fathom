@@ -330,7 +330,7 @@ fn subfactor(k: usize, n: usize) -> usize {
 
 /// Structural metadata derived from the material key (e.g. "kqvk").
 #[derive(Debug, Clone)]
-pub(crate) struct TableMeta {
+pub struct TableMeta {
     pub(crate) num: usize,
     pub(crate) has_pawns: bool,
     pub(crate) symmetric: bool,
@@ -339,7 +339,7 @@ pub(crate) struct TableMeta {
 }
 
 /// Parse a lower-case material key (e.g. "kqvkr") into [`TableMeta`].
-pub(crate) fn parse_material_key(key: &str) -> Option<TableMeta> {
+pub fn parse_material_key(key: &str) -> Option<TableMeta> {
     // Count pieces on each side and by type
     let mut pcs = [0u8; 16]; // indexed by piece code (same as tbchess.c)
     let mut color_offset = 0u8; // 0 = white side, 8 = black side
@@ -1070,7 +1070,7 @@ fn leading_pawn(p: &mut [i32; TB_PIECES], meta: &TableMeta) -> usize {
 /// `data` is the memory-mapped (or buffered) file bytes.
 /// `flip` = true if piece colors were swapped for canonical ordering.
 /// `turn_is_white` = true if the side to move is white (in the original, pre-flip orientation).
-pub(crate) fn probe_wdl_syzygy(
+pub fn probe_wdl_syzygy(
     data: &[u8],
     meta: &TableMeta,
     flip: bool,
@@ -1249,7 +1249,7 @@ pub(crate) fn probe_wdl_syzygy(
 /// Probe a .rtbz file (DTZ) using the real Syzygy binary format.
 ///
 /// `wdl` is the WDL result for this position (-2..2), needed for DTZ map lookup.
-pub(crate) fn probe_dtz_syzygy(
+pub fn probe_dtz_syzygy(
     data: &[u8],
     meta: &TableMeta,
     flip: bool,

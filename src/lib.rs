@@ -33,7 +33,7 @@ pub use constants::*;
 pub use probe::Tablebase;
 pub use types::*;
 
-pub(crate) mod syzygy;
+pub mod syzygy;
 
 #[cfg(feature = "helper-api")]
 pub mod helper;

@@ -13,12 +13,11 @@ categories = ["games"]
 memmap2 = "0.9"
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = "0.8.2"
 
 [features]
 default = ["helper-api"]
 helper-api = []
 
 [lib]
-name = "rfathom"
 path = "src/lib.rs"
