@@ -153,6 +153,17 @@ RFathom/
 - Reckless does not read the PV array (`pvSize` always 0, never accessed)
 - Root moves are sorted by `tb_rank` by the engine — no iterative PV needed
 
+### ✅ Optimization — Zero-Disk-I/O Probing (Complete)
+- [x] `load_into_index` mmaps each `.rtbw` / `.rtbz` file once at `init()` time
+- [x] `Arc<Mmap>` cached in `MaterialTables.wdl_data` / `dtz_data`
+- [x] `probe_wdl_value` / `probe_dtz_value` take `&[u8]` — no path access per probe
+- [x] `probe_wdl_impl` and `probe_root_impl` use cached slices from `wdl_data`/`dtz_data`
+- [x] Fallback to `fs::read` only for tiny synthetic test files where mmap was skipped
+- [x] Removed `TableReader` / `TableData` structs (no longer needed)
+- [x] Removed dead error variants: `ReadHeaderFailed`, `InvalidReadRange`
+- [x] Equivalent to Fathom C `tb_init()` mmap strategy — zero disk I/O per probe
+- [x] All 54 tests still passing, zero warnings
+
 ### 🚧 Optimization (Low Priority)
 - [ ] Pre-computed attack lookup tables (currently computed on-the-fly)
 - [ ] Performance benchmarks vs original Fathom C library
@@ -180,8 +191,8 @@ RFathom/
 
 ---
 
-**Status**: Real Syzygy decoder validated against live files; integration tests passing 🟢  
-**Last Updated**: March 23, 2026  
+**Status**: Zero-disk-I/O probing complete; all 54 tests passing 🟢  
+**Last Updated**: March 2026  
 **Version**: 0.1.0  
 **Tests**: 54 passing ✅ (45 unit + 8 integration + 1 doc)
 

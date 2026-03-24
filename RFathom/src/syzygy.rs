@@ -1074,6 +1074,7 @@ fn fill_all_squares(
     }
 }
 
+#[allow(dead_code)]
 fn leading_pawn(p: &mut [i32; TB_PIECES], meta: &TableMeta) -> usize {
     let n0 = meta.pawns[0];
     for i in 1..n0 {
