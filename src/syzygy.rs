@@ -1346,12 +1346,8 @@ pub(crate) fn probe_dtz_syzygy(
     for pd in pd_vec.iter_mut().take(num_tables) {
         pd.index_table_off = data_off;
         data_off += pd.idx_table_size;
-    }
-    for pd in pd_vec.iter_mut().take(num_tables) {
         pd.size_table_off = data_off;
         data_off += pd.size_table_size;
-    }
-    for pd in pd_vec.iter_mut().take(num_tables) {
         data_off = (data_off + 0x3f) & !0x3f;
         pd.data_off = data_off;
         data_off += pd.data_size;
