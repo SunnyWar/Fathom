@@ -967,11 +967,8 @@ fn encode_position(p: &mut [i32; TB_PIECES], ei: &EncInfo, meta: &TableMeta, enc
 // ── fill_squares ──────────────────────────────────────────────────────────────
 
 /// Fill `p[start..]` with squares for the piece type `piece_code`.
-/// Returns the new index (start + number of squares filled).
-fn fill_squares_for_piece(
-    piece_code: u8,
-    flip: bool,
-    mirror: i32,
+/// Holds all bitboards for piece types for square-filling routines.
+struct PieceBitboards {
     white: u64,
     black: u64,
     kings: u64,
@@ -980,6 +977,14 @@ fn fill_squares_for_piece(
     bishops: u64,
     knights: u64,
     pawns: u64,
+}
+
+/// Returns the new index (start + number of squares filled).
+fn fill_squares_for_piece(
+    piece_code: u8,
+    flip: bool,
+    mirror: i32,
+    bits: &PieceBitboards,
     p: &mut [i32; TB_PIECES],
     start: usize,
 ) -> usize {
@@ -992,14 +997,18 @@ fn fill_squares_for_piece(
     };
 
     let piece_type = piece_code & 0x07; // 1=pawn..6=king (same for both colors)
-    let color_bb = if color_is_white { white } else { black };
+    let color_bb = if color_is_white {
+        bits.white
+    } else {
+        bits.black
+    };
     let type_bb = match piece_type {
-        1 => pawns,
-        2 => knights,
-        3 => bishops,
-        4 => rooks,
-        5 => queens,
-        6 => kings,
+        1 => bits.pawns,
+        2 => bits.knights,
+        3 => bits.bishops,
+        4 => bits.rooks,
+        5 => bits.queens,
+        6 => bits.kings,
         _ => 0,
     };
     let bb = color_bb & type_bb;
@@ -1022,33 +1031,12 @@ fn fill_all_squares(
     meta: &TableMeta,
     flip: bool,
     mirror: i32,
-    white: u64,
-    black: u64,
-    kings: u64,
-    queens: u64,
-    rooks: u64,
-    bishops: u64,
-    knights: u64,
-    pawns: u64,
+    bits: &PieceBitboards,
     p: &mut [i32; TB_PIECES],
 ) {
     let mut i = 0;
     while i < meta.num {
-        i = fill_squares_for_piece(
-            ei.pieces[i],
-            flip,
-            mirror,
-            white,
-            black,
-            kings,
-            queens,
-            rooks,
-            bishops,
-            knights,
-            pawns,
-            p,
-            i,
-        );
+        i = fill_squares_for_piece(ei.pieces[i], flip, mirror, bits, p, i);
     }
 }
 
@@ -1070,6 +1058,7 @@ fn leading_pawn(p: &mut [i32; TB_PIECES], meta: &TableMeta) -> usize {
 /// `data` is the memory-mapped (or buffered) file bytes.
 /// `flip` = true if piece colors were swapped for canonical ordering.
 /// `turn_is_white` = true if the side to move is white (in the original, pre-flip orientation).
+#[allow(clippy::too_many_arguments)]
 pub fn probe_wdl_syzygy(
     data: &[u8],
     meta: &TableMeta,
@@ -1182,22 +1171,18 @@ pub fn probe_wdl_syzygy(
         let mut p = [0i32; TB_PIECES];
         // Fill just the first group (pawns) to find leading pawn
         let mut i = 0;
+        let bits = PieceBitboards {
+            white,
+            black,
+            kings,
+            queens,
+            rooks,
+            bishops,
+            knights,
+            pawns,
+        };
         while i < meta.num {
-            i = fill_squares_for_piece(
-                ei_main[0].0.pieces[i],
-                flip,
-                mirror,
-                white,
-                black,
-                kings,
-                queens,
-                rooks,
-                bishops,
-                knights,
-                pawns,
-                &mut p,
-                i,
-            );
+            i = fill_squares_for_piece(ei_main[0].0.pieces[i], flip, mirror, &bits, &mut p, i);
             if i >= meta.pawns[0] {
                 break;
             }
@@ -1227,10 +1212,17 @@ pub fn probe_wdl_syzygy(
         0i32
     };
     let mut p = [0i32; TB_PIECES];
-    fill_all_squares(
-        ei_ref, meta, flip, mirror, white, black, kings, queens, rooks, bishops, knights, pawns,
-        &mut p,
-    );
+    let bits = PieceBitboards {
+        white,
+        black,
+        kings,
+        queens,
+        rooks,
+        bishops,
+        knights,
+        pawns,
+    };
+    fill_all_squares(ei_ref, meta, flip, mirror, &bits, &mut p);
 
     let idx = encode_position(&mut p, ei_ref, meta, enc);
     let w = decompress_pairs(data, pd_ref, idx);
@@ -1249,6 +1241,7 @@ pub fn probe_wdl_syzygy(
 /// Probe a .rtbz file (DTZ) using the real Syzygy binary format.
 ///
 /// `wdl` is the WDL result for this position (-2..2), needed for DTZ map lookup.
+#[allow(clippy::too_many_arguments)]
 pub fn probe_dtz_syzygy(
     data: &[u8],
     meta: &TableMeta,
@@ -1359,22 +1352,18 @@ pub fn probe_dtz_syzygy(
         let mirror = if flip { 0x38i32 } else { 0i32 };
         let mut p = [0i32; TB_PIECES];
         let mut i = 0;
+        let bits = PieceBitboards {
+            white,
+            black,
+            kings,
+            queens,
+            rooks,
+            bishops,
+            knights,
+            pawns,
+        };
         while i < meta.pawns[0] {
-            i = fill_squares_for_piece(
-                ei_vec[0].0.pieces[i],
-                flip,
-                mirror,
-                white,
-                black,
-                kings,
-                queens,
-                rooks,
-                bishops,
-                knights,
-                pawns,
-                &mut p,
-                i,
-            );
+            i = fill_squares_for_piece(ei_vec[0].0.pieces[i], flip, mirror, &bits, &mut p, i);
         }
         leading_pawn(&mut p, meta).min(num_tables - 1)
     } else {
@@ -1396,10 +1385,17 @@ pub fn probe_dtz_syzygy(
         0i32
     };
     let mut p = [0i32; TB_PIECES];
-    fill_all_squares(
-        ei_ref, meta, flip, mirror, white, black, kings, queens, rooks, bishops, knights, pawns,
-        &mut p,
-    );
+    let bits = PieceBitboards {
+        white,
+        black,
+        kings,
+        queens,
+        rooks,
+        bishops,
+        knights,
+        pawns,
+    };
+    fill_all_squares(ei_ref, meta, flip, mirror, &bits, &mut p);
 
     let idx = encode_position(&mut p, ei_ref, meta, enc);
     let w = decompress_pairs(data, pd_ref, idx);

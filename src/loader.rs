@@ -295,7 +295,7 @@ pub(crate) fn probe_dtz_value(data: &[u8], key: u64) -> Result<i32, LoaderError>
     }
 
     let payload_len = data.len() - 4;
-    if payload_len % 2 != 0 {
+    if !payload_len.is_multiple_of(2) {
         return Err(LoaderError::InvalidDtzPayload {
             path: PathBuf::new(),
         });

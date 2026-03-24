@@ -1,8 +1,10 @@
 //! Tablebase probing functionality
 
 use crate::encoding::{encode_position, PositionInput};
-use crate::loader::{load_table_index, load_table_index_multi, probe_dtz_value, probe_wdl_value, TableIndex};
-use crate::syzygy::{probe_dtz_syzygy, probe_wdl_syzygy, WDL_MAGIC, DTZ_MAGIC};
+use crate::loader::{
+    load_table_index, load_table_index_multi, probe_dtz_value, probe_wdl_value, TableIndex,
+};
+use crate::syzygy::{probe_dtz_syzygy, probe_wdl_syzygy, DTZ_MAGIC, WDL_MAGIC};
 use crate::types::*;
 use crate::{Promotion, WdlValue};
 use std::path::Path;
@@ -45,10 +47,7 @@ impl Tablebase {
     pub fn init<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
         let path_str = path.as_ref().to_string_lossy();
         let sep = if cfg!(windows) { ';' } else { ':' };
-        let dirs: Vec<&Path> = path_str
-            .split(sep)
-            .map(Path::new)
-            .collect();
+        let dirs: Vec<&Path> = path_str.split(sep).map(Path::new).collect();
 
         let index = if dirs.len() == 1 {
             load_table_index(dirs[0]).map_err(|e| e.to_string())?
@@ -228,49 +227,60 @@ impl Tablebase {
         }
 
         let root = Pos::new(
-            white, black, kings, queens, rooks, bishops, knights, pawns,
-            rule50, ep, turn,
+            white, black, kings, queens, rooks, bishops, knights, pawns, rule50, ep, turn,
         );
         let legal = gen_legal_moves(&root);
         if legal.is_empty() {
             return None;
         }
 
-        let cnt50  = rule50 as i32;
-        let bound  = if use_rule50 { 900 } else { 1 };
+        let cnt50 = rule50 as i32;
+        let bound = if use_rule50 { 900 } else { 1 };
         let mut moves = RootMoves::new();
 
         for (from, to, promo) in &legal {
             let child = match root.do_move(*from, *to, *promo) {
                 Some(c) => c,
-                None    => continue,
+                None => continue,
             };
 
             // rule50 resets on capture/pawn → use WDL; otherwise use DTZ + adjust.
             let v = if child.rule50 == 0 {
                 let wdl = match self.probe_wdl_pos(&child) {
                     Some(w) => w,
-                    None    => continue,
+                    None => continue,
                 };
                 WDL_TO_DTZ[(-wdl_to_int(wdl) + 2) as usize]
             } else {
                 let dtz_child = match self.probe_dtz_pos(&child) {
                     Some(d) => d,
-                    None    => continue,
+                    None => continue,
                 };
                 let neg = -dtz_child;
-                if neg > 0 { neg + 1 } else if neg < 0 { neg - 1 } else { 0 }
+                if neg > 0 {
+                    neg + 1
+                } else if neg < 0 {
+                    neg - 1
+                } else {
+                    0
+                }
             };
 
             // DTZ = 2 but child has no legal moves and is in check → mate in 1.
             let v = if v == 2 && is_mate(&child) { 1 } else { v };
 
             let tb_rank = if v > 0 {
-                if v + cnt50 <= 99 && !has_repeated { 1000 }
-                else { 1000 - (v + cnt50) }
+                if v + cnt50 <= 99 && !has_repeated {
+                    1000
+                } else {
+                    1000 - (v + cnt50)
+                }
             } else if v < 0 {
-                if (-v) * 2 + cnt50 < 100 { -1000 }
-                else { -1000 + (-v + cnt50) }
+                if (-v) * 2 + cnt50 < 100 {
+                    -1000
+                } else {
+                    -1000 + (-v + cnt50)
+                }
             } else {
                 0
             };
@@ -289,13 +299,17 @@ impl Tablebase {
 
             let mv = Move::new(*from, *to, *promo);
             let mut rm = RootMove::new(mv);
-            rm.tb_rank  = tb_rank;
+            rm.tb_rank = tb_rank;
             rm.tb_score = tb_score;
             rm.pv.push(mv);
             moves.push(rm);
         }
 
-        if moves.is_empty() { None } else { Some(moves) }
+        if moves.is_empty() {
+            None
+        } else {
+            Some(moves)
+        }
     }
 
     /// Probe root position using WDL tables and return ranked moves.
@@ -329,8 +343,7 @@ impl Tablebase {
         }
 
         let root = Pos::new(
-            white, black, kings, queens, rooks, bishops, knights, pawns,
-            rule50, ep, turn,
+            white, black, kings, queens, rooks, bishops, knights, pawns, rule50, ep, turn,
         );
         let legal = gen_legal_moves(&root);
         if legal.is_empty() {
@@ -342,56 +355,87 @@ impl Tablebase {
         for (from, to, promo) in &legal {
             let child = match root.do_move(*from, *to, *promo) {
                 Some(c) => c,
-                None    => continue,
+                None => continue,
             };
 
             let wdl_child = match self.probe_wdl_pos(&child) {
                 Some(w) => w,
-                None    => continue,
+                None => continue,
             };
             let v_raw = -wdl_to_int(wdl_child); // from our perspective
             let v = if !use_rule50 {
-                if v_raw > 0 { 2 } else if v_raw < 0 { -2 } else { 0 }
+                if v_raw > 0 {
+                    2
+                } else if v_raw < 0 {
+                    -2
+                } else {
+                    0
+                }
             } else {
                 v_raw
             };
 
-            let tb_rank  = WDL_TO_RANK[(v + 2) as usize];
+            let tb_rank = WDL_TO_RANK[(v + 2) as usize];
             let tb_score = match v {
-                 2 =>  TB_VALUE_MATE - TB_MAX_MATE_PLY - 1,
-                 1 =>  TB_VALUE_DRAW + 2,
-                 0 =>  TB_VALUE_DRAW,
-                -1 =>  TB_VALUE_DRAW - 2,
-                _  => -(TB_VALUE_MATE - TB_MAX_MATE_PLY - 1),
+                2 => TB_VALUE_MATE - TB_MAX_MATE_PLY - 1,
+                1 => TB_VALUE_DRAW + 2,
+                0 => TB_VALUE_DRAW,
+                -1 => TB_VALUE_DRAW - 2,
+                _ => -(TB_VALUE_MATE - TB_MAX_MATE_PLY - 1),
             };
 
             let mv = Move::new(*from, *to, *promo);
             let mut rm = RootMove::new(mv);
-            rm.tb_rank  = tb_rank;
+            rm.tb_rank = tb_rank;
             rm.tb_score = tb_score;
             rm.pv.push(mv);
             moves.push(rm);
         }
 
-        if moves.is_empty() { None } else { Some(moves) }
+        if moves.is_empty() {
+            None
+        } else {
+            Some(moves)
+        }
     }
 
     // ── per-move probing helpers ─────────────────────────────────────────────
 
     fn probe_wdl_pos(&self, pos: &Pos) -> Option<WdlValue> {
         self.probe_wdl_impl(
-            pos.white, pos.black, pos.kings, pos.queens, pos.rooks,
-            pos.bishops, pos.knights, pos.pawns, pos.ep, pos.turn,
+            pos.white,
+            pos.black,
+            pos.kings,
+            pos.queens,
+            pos.rooks,
+            pos.bishops,
+            pos.knights,
+            pos.pawns,
+            pos.ep,
+            pos.turn,
         )
     }
 
     fn probe_dtz_pos(&self, pos: &Pos) -> Option<i32> {
         let probe = self.probe_root_impl(
-            pos.white, pos.black, pos.kings, pos.queens, pos.rooks,
-            pos.bishops, pos.knights, pos.pawns,
-            0, pos.ep, pos.turn, None,
+            pos.white,
+            pos.black,
+            pos.kings,
+            pos.queens,
+            pos.rooks,
+            pos.bishops,
+            pos.knights,
+            pos.pawns,
+            0,
+            pos.ep,
+            pos.turn,
+            None,
         );
-        if probe.is_failed() { None } else { Some(probe.dtz()) }
+        if probe.is_failed() {
+            None
+        } else {
+            Some(probe.dtz())
+        }
     }
 
     // Internal implementation stubs
@@ -432,9 +476,20 @@ impl Tablebase {
         // Use cached mmap data if available; fall back to on-demand read for
         // synthetic test files that couldn't be mmap'd at init time.
         let wdl = if let Some(data) = tables.wdl_data.as_deref() {
-            try_probe_wdl_data(data, tables.meta.as_ref(),
-                encoded.color_flipped, turn == crate::Color::White,
-                white, black, kings, queens, rooks, bishops, knights, pawns)
+            try_probe_wdl_data(
+                data,
+                tables.meta.as_ref(),
+                encoded.color_flipped,
+                turn == crate::Color::White,
+                white,
+                black,
+                kings,
+                queens,
+                rooks,
+                bishops,
+                knights,
+                pawns,
+            )
             .or_else(|| probe_wdl_value(data, encoded.key).ok().flatten())?
         } else {
             let wdl_path = tables.wdl.as_ref()?;
@@ -442,7 +497,11 @@ impl Tablebase {
             probe_wdl_value(&data, encoded.key).ok().flatten()?
         };
 
-        Some(if encoded.color_flipped { flip_wdl(wdl) } else { wdl })
+        Some(if encoded.color_flipped {
+            flip_wdl(wdl)
+        } else {
+            wdl
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -497,30 +556,49 @@ impl Tablebase {
         // All data comes from the cached mmap — no disk I/O.
         let wdl_for_dtz = tables.wdl_data.as_deref().and_then(|wd| {
             try_probe_wdl_data(
-                wd, tables.meta.as_ref(),
-                encoded.color_flipped, turn == crate::Color::White,
-                white, black, kings, queens, rooks, bishops, knights, pawns,
+                wd,
+                tables.meta.as_ref(),
+                encoded.color_flipped,
+                turn == crate::Color::White,
+                white,
+                black,
+                kings,
+                queens,
+                rooks,
+                bishops,
+                knights,
+                pawns,
             )
         });
         let wdl_int = match wdl_for_dtz {
-            Some(WdlValue::Loss)        => -2,
+            Some(WdlValue::Loss) => -2,
             Some(WdlValue::BlessedLoss) => -1,
-            Some(WdlValue::Draw)        =>  0,
-            Some(WdlValue::CursedWin)   =>  1,
-            Some(WdlValue::Win)         =>  2,
+            Some(WdlValue::Draw) => 0,
+            Some(WdlValue::CursedWin) => 1,
+            Some(WdlValue::Win) => 2,
             None => 0,
         };
 
         let dtz = if let Some(dd) = tables.dtz_data.as_deref() {
             try_probe_dtz_data(
-                dd, tables.meta.as_ref(),
-                encoded.color_flipped, turn == crate::Color::White,
+                dd,
+                tables.meta.as_ref(),
+                encoded.color_flipped,
+                turn == crate::Color::White,
                 wdl_int,
-                white, black, kings, queens, rooks, bishops, knights, pawns,
+                white,
+                black,
+                kings,
+                queens,
+                rooks,
+                bishops,
+                knights,
+                pawns,
             )
             .or_else(|| probe_dtz_value(dd, encoded.key).ok())
         } else if let Some(dtz_path) = tables.dtz.as_ref() {
-            std::fs::read(dtz_path).ok()
+            std::fs::read(dtz_path)
+                .ok()
                 .and_then(|data| probe_dtz_value(&data, encoded.key).ok())
         } else {
             return ProbeResult::FAILED;
@@ -528,24 +606,48 @@ impl Tablebase {
 
         let wdl = if let Some(wd) = tables.wdl_data.as_deref() {
             let raw = try_probe_wdl_data(
-                wd, tables.meta.as_ref(),
-                encoded.color_flipped, turn == crate::Color::White,
-                white, black, kings, queens, rooks, bishops, knights, pawns,
+                wd,
+                tables.meta.as_ref(),
+                encoded.color_flipped,
+                turn == crate::Color::White,
+                white,
+                black,
+                kings,
+                queens,
+                rooks,
+                bishops,
+                knights,
+                pawns,
             )
             .or_else(|| probe_wdl_value(wd, encoded.key).ok().flatten())
             .unwrap_or_else(|| wdl_from_dtz(dtz.unwrap_or(0)));
-            if encoded.color_flipped { flip_wdl(raw) } else { raw }
+            if encoded.color_flipped {
+                flip_wdl(raw)
+            } else {
+                raw
+            }
         } else if let Some(wdl_path) = tables.wdl.as_ref() {
-            let raw = std::fs::read(wdl_path).ok()
+            let raw = std::fs::read(wdl_path)
+                .ok()
                 .and_then(|data| probe_wdl_value(&data, encoded.key).ok().flatten())
                 .unwrap_or_else(|| wdl_from_dtz(dtz.unwrap_or(0)));
-            if encoded.color_flipped { flip_wdl(raw) } else { raw }
+            if encoded.color_flipped {
+                flip_wdl(raw)
+            } else {
+                raw
+            }
         } else {
             wdl_from_dtz(dtz.unwrap_or(0))
         };
 
         let dtz = match dtz {
-            Some(v) => if encoded.color_flipped { -v } else { v },
+            Some(v) => {
+                if encoded.color_flipped {
+                    -v
+                } else {
+                    v
+                }
+            }
             None => return ProbeResult::FAILED,
         };
 
@@ -570,15 +672,37 @@ fn try_probe_wdl_data(
     meta: Option<&crate::syzygy::TableMeta>,
     color_flipped: bool,
     turn_is_white: bool,
-    white: u64, black: u64,
-    kings: u64, queens: u64, rooks: u64, bishops: u64, knights: u64, pawns: u64,
+    white: u64,
+    black: u64,
+    kings: u64,
+    queens: u64,
+    rooks: u64,
+    bishops: u64,
+    knights: u64,
+    pawns: u64,
 ) -> Option<WdlValue> {
     let meta = meta?;
-    if data.len() < 4 { return None; }
+    if data.len() < 4 {
+        return None;
+    }
     let magic = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
-    if magic != WDL_MAGIC { return None; }
-    probe_wdl_syzygy(data, meta, color_flipped, turn_is_white,
-        white, black, kings, queens, rooks, bishops, knights, pawns)
+    if magic != WDL_MAGIC {
+        return None;
+    }
+    probe_wdl_syzygy(
+        data,
+        meta,
+        color_flipped,
+        turn_is_white,
+        white,
+        black,
+        kings,
+        queens,
+        rooks,
+        bishops,
+        knights,
+        pawns,
+    )
 }
 
 /// Probe DTZ from a pre-loaded data slice (zero disk I/O).
@@ -589,15 +713,38 @@ fn try_probe_dtz_data(
     color_flipped: bool,
     turn_is_white: bool,
     wdl: i32,
-    white: u64, black: u64,
-    kings: u64, queens: u64, rooks: u64, bishops: u64, knights: u64, pawns: u64,
+    white: u64,
+    black: u64,
+    kings: u64,
+    queens: u64,
+    rooks: u64,
+    bishops: u64,
+    knights: u64,
+    pawns: u64,
 ) -> Option<i32> {
     let meta = meta?;
-    if data.len() < 4 { return None; }
+    if data.len() < 4 {
+        return None;
+    }
     let magic = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
-    if magic != DTZ_MAGIC { return None; }
-    probe_dtz_syzygy(data, meta, color_flipped, turn_is_white, wdl,
-        white, black, kings, queens, rooks, bishops, knights, pawns)
+    if magic != DTZ_MAGIC {
+        return None;
+    }
+    probe_dtz_syzygy(
+        data,
+        meta,
+        color_flipped,
+        turn_is_white,
+        wdl,
+        white,
+        black,
+        kings,
+        queens,
+        rooks,
+        bishops,
+        knights,
+        pawns,
+    )
 }
 
 fn synthesize_root_move_squares(white: Bitboard, black: Bitboard, turn: Color) -> (Square, Square) {
@@ -621,6 +768,7 @@ fn synthesize_root_move_squares(white: Bitboard, black: Bitboard, turn: Color) -
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 fn generate_candidate_root_moves(
     white: Bitboard,
     black: Bitboard,
@@ -867,11 +1015,11 @@ fn offset_square(from: Square, file_delta: i8, rank_delta: i8) -> Option<Square>
 /// Convert a `WdlValue` to an integer in -2..+2 (Loss=-2, Win=+2).
 fn wdl_to_int(wdl: WdlValue) -> i32 {
     match wdl {
-        WdlValue::Loss        => -2,
+        WdlValue::Loss => -2,
         WdlValue::BlessedLoss => -1,
-        WdlValue::Draw        =>  0,
-        WdlValue::CursedWin   =>  1,
-        WdlValue::Win         =>  2,
+        WdlValue::Draw => 0,
+        WdlValue::CursedWin => 1,
+        WdlValue::Win => 2,
     }
 }
 
@@ -886,28 +1034,47 @@ fn do_bb_move(b: u64, from: Square, to: Square) -> u64 {
 /// Internal compact position state for move-application and probing.
 #[derive(Clone, Copy)]
 struct Pos {
-    white:   Bitboard,
-    black:   Bitboard,
-    kings:   Bitboard,
-    queens:  Bitboard,
-    rooks:   Bitboard,
+    white: Bitboard,
+    black: Bitboard,
+    kings: Bitboard,
+    queens: Bitboard,
+    rooks: Bitboard,
     bishops: Bitboard,
     knights: Bitboard,
-    pawns:   Bitboard,
-    rule50:  u32,
-    ep:      Square,
-    turn:    Color,
+    pawns: Bitboard,
+    rule50: u32,
+    ep: Square,
+    turn: Color,
 }
 
 impl Pos {
     #[allow(clippy::too_many_arguments)]
     fn new(
-        white: Bitboard, black: Bitboard,
-        kings: Bitboard, queens: Bitboard, rooks: Bitboard,
-        bishops: Bitboard, knights: Bitboard, pawns: Bitboard,
-        rule50: u32, ep: Square, turn: Color,
+        white: Bitboard,
+        black: Bitboard,
+        kings: Bitboard,
+        queens: Bitboard,
+        rooks: Bitboard,
+        bishops: Bitboard,
+        knights: Bitboard,
+        pawns: Bitboard,
+        rule50: u32,
+        ep: Square,
+        turn: Color,
     ) -> Self {
-        Pos { white, black, kings, queens, rooks, bishops, knights, pawns, rule50, ep, turn }
+        Pos {
+            white,
+            black,
+            kings,
+            queens,
+            rooks,
+            bishops,
+            knights,
+            pawns,
+            rule50,
+            ep,
+            turn,
+        }
     }
 
     /// Apply a move (from, to, promo) and return the new position.
@@ -915,41 +1082,52 @@ impl Pos {
     /// king would be captured — which never happens in legal positions).
     fn do_move(&self, from: Square, to: Square, promo: Promotion) -> Option<Pos> {
         let from_bit = 1u64 << from;
-        let to_bit   = 1u64 << to;
-        let was_pawn   = (self.pawns & from_bit) != 0;
+        let to_bit = 1u64 << to;
+        let was_pawn = (self.pawns & from_bit) != 0;
         let is_capture = ((self.white | self.black) & to_bit) != 0;
-        let is_ep      = was_pawn && self.ep != 0 && to == self.ep;
+        let is_ep = was_pawn && self.ep != 0 && to == self.ep;
 
         let mut pos = Pos {
-            white:   do_bb_move(self.white,   from, to),
-            black:   do_bb_move(self.black,   from, to),
-            kings:   do_bb_move(self.kings,   from, to),
-            queens:  do_bb_move(self.queens,  from, to),
-            rooks:   do_bb_move(self.rooks,   from, to),
+            white: do_bb_move(self.white, from, to),
+            black: do_bb_move(self.black, from, to),
+            kings: do_bb_move(self.kings, from, to),
+            queens: do_bb_move(self.queens, from, to),
+            rooks: do_bb_move(self.rooks, from, to),
             bishops: do_bb_move(self.bishops, from, to),
             knights: do_bb_move(self.knights, from, to),
-            pawns:   do_bb_move(self.pawns,   from, to),
-            rule50:  if was_pawn || is_capture || promo != Promotion::None { 0 }
-                     else { self.rule50 + 1 },
-            ep:      0,
-            turn:    if self.turn == Color::White { Color::Black } else { Color::White },
+            pawns: do_bb_move(self.pawns, from, to),
+            rule50: if was_pawn || is_capture || promo != Promotion::None {
+                0
+            } else {
+                self.rule50 + 1
+            },
+            ep: 0,
+            turn: if self.turn == Color::White {
+                Color::Black
+            } else {
+                Color::White
+            },
         };
 
         // Promotion: replace the pawn at `to` with the promoted piece.
         if promo != Promotion::None {
             pos.pawns &= !to_bit;
             match promo {
-                Promotion::Queen  => pos.queens  |= to_bit,
-                Promotion::Rook   => pos.rooks   |= to_bit,
+                Promotion::Queen => pos.queens |= to_bit,
+                Promotion::Rook => pos.rooks |= to_bit,
                 Promotion::Bishop => pos.bishops |= to_bit,
                 Promotion::Knight => pos.knights |= to_bit,
-                Promotion::None   => unreachable!(),
+                Promotion::None => unreachable!(),
             }
         }
 
         // En passant capture: remove the captured pawn behind the ep square.
         if is_ep {
-            let cap_sq  = if self.turn == Color::White { to - 8 } else { to + 8 };
+            let cap_sq = if self.turn == Color::White {
+                to - 8
+            } else {
+                to + 8
+            };
             let cap_bit = 1u64 << cap_sq;
             pos.white &= !cap_bit;
             pos.black &= !cap_bit;
@@ -959,15 +1137,19 @@ impl Pos {
         // Set new ep square on double pawn push (only if opponent can capture).
         if was_pawn && promo == Promotion::None {
             let fr = from / 8;
-            let tr = to   / 8;
+            let tr = to / 8;
             if self.turn == Color::White && fr == 1 && tr == 3 {
                 let ep_sq = from + 8;
                 let atk = crate::helper::pawn_attacks(ep_sq, Color::White);
-                if atk & pos.pawns & pos.black != 0 { pos.ep = ep_sq; }
+                if atk & pos.pawns & pos.black != 0 {
+                    pos.ep = ep_sq;
+                }
             } else if self.turn == Color::Black && fr == 6 && tr == 4 {
                 let ep_sq = from - 8;
                 let atk = crate::helper::pawn_attacks(ep_sq, Color::Black);
-                if atk & pos.pawns & pos.white != 0 { pos.ep = ep_sq; }
+                if atk & pos.pawns & pos.white != 0 {
+                    pos.ep = ep_sq;
+                }
             }
         }
 
@@ -986,10 +1168,20 @@ impl Pos {
 
     /// Return true if `color`'s king is attacked by the opposing side.
     fn is_in_check(&self, color: Color) -> bool {
-        let own = if color == Color::White { self.white } else { self.black };
-        let opp = if color == Color::White { self.black } else { self.white };
+        let own = if color == Color::White {
+            self.white
+        } else {
+            self.black
+        };
+        let opp = if color == Color::White {
+            self.black
+        } else {
+            self.white
+        };
         let king_bb = self.kings & own;
-        if king_bb == 0 { return false; }
+        if king_bb == 0 {
+            return false;
+        }
         let king_sq = king_bb.trailing_zeros() as Square;
         let occ = self.white | self.black;
 
@@ -1021,11 +1213,19 @@ impl Pos {
 /// Promotions emit all four piece types (Q, N, R, B).
 /// King captures are excluded (they cannot arise in legal positions).
 fn gen_pseudo_legal_moves(pos: &Pos) -> Vec<(Square, Square, Promotion)> {
-    let own      = if pos.turn == Color::White { pos.white } else { pos.black };
-    let opp      = if pos.turn == Color::White { pos.black } else { pos.white };
-    let occ      = pos.white | pos.black;
+    let own = if pos.turn == Color::White {
+        pos.white
+    } else {
+        pos.black
+    };
+    let opp = if pos.turn == Color::White {
+        pos.black
+    } else {
+        pos.white
+    };
+    let occ = pos.white | pos.black;
     let opp_king = pos.kings & opp;
-    let mut out  = Vec::new();
+    let mut out = Vec::new();
 
     // King
     let mut bb = pos.kings & own;
@@ -1034,7 +1234,8 @@ fn gen_pseudo_legal_moves(pos: &Pos) -> Vec<(Square, Square, Promotion)> {
         bb &= bb - 1;
         let mut atk = crate::helper::king_attacks(from) & !own & !opp_king;
         while atk != 0 {
-            let to = atk.trailing_zeros() as Square; atk &= atk - 1;
+            let to = atk.trailing_zeros() as Square;
+            atk &= atk - 1;
             out.push((from, to, Promotion::None));
         }
     }
@@ -1045,7 +1246,8 @@ fn gen_pseudo_legal_moves(pos: &Pos) -> Vec<(Square, Square, Promotion)> {
         bb &= bb - 1;
         let mut atk = crate::helper::queen_attacks(from, occ) & !own & !opp_king;
         while atk != 0 {
-            let to = atk.trailing_zeros() as Square; atk &= atk - 1;
+            let to = atk.trailing_zeros() as Square;
+            atk &= atk - 1;
             out.push((from, to, Promotion::None));
         }
     }
@@ -1056,7 +1258,8 @@ fn gen_pseudo_legal_moves(pos: &Pos) -> Vec<(Square, Square, Promotion)> {
         bb &= bb - 1;
         let mut atk = crate::helper::rook_attacks(from, occ) & !own & !opp_king;
         while atk != 0 {
-            let to = atk.trailing_zeros() as Square; atk &= atk - 1;
+            let to = atk.trailing_zeros() as Square;
+            atk &= atk - 1;
             out.push((from, to, Promotion::None));
         }
     }
@@ -1067,7 +1270,8 @@ fn gen_pseudo_legal_moves(pos: &Pos) -> Vec<(Square, Square, Promotion)> {
         bb &= bb - 1;
         let mut atk = crate::helper::bishop_attacks(from, occ) & !own & !opp_king;
         while atk != 0 {
-            let to = atk.trailing_zeros() as Square; atk &= atk - 1;
+            let to = atk.trailing_zeros() as Square;
+            atk &= atk - 1;
             out.push((from, to, Promotion::None));
         }
     }
@@ -1078,14 +1282,15 @@ fn gen_pseudo_legal_moves(pos: &Pos) -> Vec<(Square, Square, Promotion)> {
         bb &= bb - 1;
         let mut atk = crate::helper::knight_attacks(from) & !own & !opp_king;
         while atk != 0 {
-            let to = atk.trailing_zeros() as Square; atk &= atk - 1;
+            let to = atk.trailing_zeros() as Square;
+            atk &= atk - 1;
             out.push((from, to, Promotion::None));
         }
     }
     // Pawns
-    let back_rank:  u8 = if pos.turn == Color::White { 7 } else { 0 };
+    let back_rank: u8 = if pos.turn == Color::White { 7 } else { 0 };
     let start_rank: u8 = if pos.turn == Color::White { 1 } else { 6 };
-    let step:       i8 = if pos.turn == Color::White { 1 } else { -1 };
+    let step: i8 = if pos.turn == Color::White { 1 } else { -1 };
 
     let mut bb = pos.pawns & own;
     while bb != 0 {
@@ -1114,10 +1319,10 @@ fn gen_pseudo_legal_moves(pos: &Pos) -> Vec<(Square, Square, Promotion)> {
         }
         // Captures (including en passant); never capture the opponent's king.
         let ep_bit = if pos.ep != 0 { 1u64 << pos.ep } else { 0 };
-        let mut caps = crate::helper::pawn_attacks(from, pos.turn)
-            & ((opp & !opp_king) | ep_bit);
+        let mut caps = crate::helper::pawn_attacks(from, pos.turn) & ((opp & !opp_king) | ep_bit);
         while caps != 0 {
-            let to = caps.trailing_zeros() as Square; caps &= caps - 1;
+            let to = caps.trailing_zeros() as Square;
+            caps &= caps - 1;
             push_pawn_move(&mut out, from, to, to / 8, back_rank);
         }
     }
@@ -1126,10 +1331,18 @@ fn gen_pseudo_legal_moves(pos: &Pos) -> Vec<(Square, Square, Promotion)> {
 
 fn push_pawn_move(
     out: &mut Vec<(Square, Square, Promotion)>,
-    from: Square, to: Square, to_rank: u8, back_rank: u8,
+    from: Square,
+    to: Square,
+    to_rank: u8,
+    back_rank: u8,
 ) {
     if to_rank == back_rank {
-        for &p in &[Promotion::Queen, Promotion::Knight, Promotion::Rook, Promotion::Bishop] {
+        for &p in &[
+            Promotion::Queen,
+            Promotion::Knight,
+            Promotion::Rook,
+            Promotion::Bishop,
+        ] {
             out.push((from, to, p));
         }
     } else {
@@ -1532,9 +1745,18 @@ mod tests {
             16,
         );
 
-        assert!(candidates.contains(&(12, 20, Promotion::None)), "single push e2-e3");
-        assert!(candidates.contains(&(12, 28, Promotion::None)), "double push e2-e4");
-        assert!(candidates.contains(&(12, 21, Promotion::None)), "capture e2xf3");
+        assert!(
+            candidates.contains(&(12, 20, Promotion::None)),
+            "single push e2-e3"
+        );
+        assert!(
+            candidates.contains(&(12, 28, Promotion::None)),
+            "double push e2-e4"
+        );
+        assert!(
+            candidates.contains(&(12, 21, Promotion::None)),
+            "capture e2xf3"
+        );
     }
 
     #[test]
@@ -1555,8 +1777,14 @@ mod tests {
             Color::White,
             16,
         );
-        assert!(!candidates.contains(&(12, 20, Promotion::None)), "e2-e3 blocked");
-        assert!(!candidates.contains(&(12, 28, Promotion::None)), "e2-e4 also blocked");
+        assert!(
+            !candidates.contains(&(12, 20, Promotion::None)),
+            "e2-e3 blocked"
+        );
+        assert!(
+            !candidates.contains(&(12, 28, Promotion::None)),
+            "e2-e4 also blocked"
+        );
     }
 
     #[test]

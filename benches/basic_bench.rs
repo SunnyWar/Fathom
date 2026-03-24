@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use rfathom::syzygy::{parse_material_key, probe_dtz_syzygy, probe_wdl_syzygy};
+use rfathom::syzygy::parse_material_key;
 use std::hint::black_box;
 
 fn bench_parse_material_key(c: &mut Criterion) {
@@ -24,10 +24,10 @@ fn bench_probe_wdl_syzygy(c: &mut Criterion) {
     }
 
     // Example: KBNvK position (same as integration test)
-    let wk = 1u64 << (0 * 8 + 2); // c1
-    let wb = 1u64 << (0 * 8 + 5); // f1
-    let wn = 1u64 << (0 * 8 + 6); // g1
-    let bk = 1u64 << (2 * 8 + 3); // d3
+    let wk = 1u64 << 2; // c1
+    let wb = 1u64 << 5; // f1
+    let wn = 1u64 << 6; // g1
+    let bk = 1u64 << 19; // d3
     let white = wk | wb | wn;
     let black = bk;
     let kings = wk | bk;
@@ -50,10 +50,10 @@ fn bench_probe_dtz_syzygy(c: &mut Criterion) {
     }
 
     // Example: KBNvK position (same as integration test)
-    let wk = 1u64 << (0 * 8 + 2); // c1
-    let wb = 1u64 << (0 * 8 + 5); // f1
-    let wn = 1u64 << (0 * 8 + 6); // g1
-    let bk = 1u64 << (2 * 8 + 3); // d3
+    let wk = 1u64 << 2; // c1
+    let wb = 1u64 << 5; // f1
+    let wn = 1u64 << 6; // g1
+    let bk = 1u64 << 19; // d3
     let white = wk | wb | wn;
     let black = bk;
     let kings = wk | bk;
