@@ -421,8 +421,7 @@ struct EncInfo {
 
 // ── PairsData ─────────────────────────────────────────────────────────────────
 
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct PairsData {
     is_const: bool,
     const_value: [u8; 2],
@@ -446,7 +445,6 @@ struct PairsData {
     size_table_size: usize, // bytes
     data_size: usize,       // bytes
 }
-
 
 /// Parse a PairsData header from `data[off..]`.
 /// Returns (parsed PairsData, new offset after the sym_pat section, flags byte).
@@ -1301,8 +1299,8 @@ pub(crate) fn probe_dtz_syzygy(
     // ── Phase 2: parse PairsData headers ──────────────────────────────────────
     let mut pd_vec: Vec<PairsData> = Vec::new();
     let mut flags_vec: Vec<u8> = Vec::new();
-    for t in 0..num_tables {
-        let (pd, next, flags) = setup_pairs(data, data_off, ei_vec[t].1, false).ok()?;
+    for &(ref ei, tb_size) in ei_vec.iter().take(num_tables) {
+        let (pd, next, flags) = setup_pairs(data, data_off, tb_size, false).ok()?;
         data_off = next;
         pd_vec.push(pd);
         flags_vec.push(flags);
@@ -1312,18 +1310,16 @@ pub(crate) fn probe_dtz_syzygy(
     // The dtz map follows immediately after the sym_pat sections.
     let dtz_map_off = data_off; // base for all map lookups
     let mut map_idx = vec![[0u16; 4]; num_tables];
-
-    for t in 0..num_tables {
-        let fl = flags_vec[t];
+    for (t, &fl) in flags_vec.iter().enumerate().take(num_tables) {
         if fl & 2 != 0 {
             if fl & 16 == 0 {
                 // byte-sized map entries
-                for i in 0..4usize {
+                for item in map_idx[t].iter_mut().take(4) {
                     if data_off >= data.len() {
                         return None;
                     }
                     let map_start = data_off as u16;
-                    map_idx[t][i] = map_start + 1;
+                    *item = map_start + 1;
                     data_off += 1 + data[data_off] as usize;
                 }
             } else {
@@ -1331,11 +1327,11 @@ pub(crate) fn probe_dtz_syzygy(
                 if data_off & 1 != 0 {
                     data_off += 1;
                 }
-                for i in 0..4usize {
+                for item in map_idx[t].iter_mut().take(4) {
                     if data_off + 2 > data.len() {
                         return None;
                     }
-                    map_idx[t][i] = (data_off / 2 + 1) as u16;
+                    *item = (data_off / 2 + 1) as u16;
                     let cnt = u16::from_le_bytes([data[data_off], data[data_off + 1]]) as usize;
                     data_off += 2 + 2 * cnt;
                 }
@@ -1351,14 +1347,14 @@ pub(crate) fn probe_dtz_syzygy(
         pd_vec[t].index_table_off = data_off;
         data_off += pd_vec[t].idx_table_size;
     }
-    for t in 0..num_tables {
-        pd_vec[t].size_table_off = data_off;
-        data_off += pd_vec[t].size_table_size;
+    for pd in pd_vec.iter_mut().take(num_tables) {
+        pd.size_table_off = data_off;
+        data_off += pd.size_table_size;
     }
-    for t in 0..num_tables {
+    for pd in pd_vec.iter_mut().take(num_tables) {
         data_off = (data_off + 0x3f) & !0x3f;
-        pd_vec[t].data_off = data_off;
-        data_off += pd_vec[t].data_size;
+        pd.data_off = data_off;
+        data_off += pd.data_size;
     }
 
     // ── Phase 5: probe ────────────────────────────────────────────────────────
