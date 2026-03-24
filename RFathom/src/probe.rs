@@ -10,6 +10,14 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
 
+// Ranking / scoring constants matching the Fathom C reference implementation.
+const WDL_TO_DTZ: [i32; 5] = [-1, -101, 0, 101, 1];
+const WDL_TO_RANK: [i32; 5] = [-1000, -899, 0, 899, 1000];
+const TB_VALUE_MATE: i32 = 30_000;
+const TB_MAX_MATE_PLY: i32 = 500;
+const TB_VALUE_PAWN: i32 = 100;
+const TB_VALUE_DRAW: i32 = 0;
+
 /// Main tablebase interface
 pub struct Tablebase {
     largest: AtomicUsize,
@@ -187,17 +195,17 @@ impl Tablebase {
         )
     }
 
-    /// Probe root position using DTZ tables and return ranked moves
+    /// Probe root position using DTZ tables and return ranked moves.
     ///
-    /// # Arguments
+    /// Probes each legal move individually using the same algorithm as the
+    /// Fathom C reference (`root_probe_dtz`): apply the move, probe the child
+    /// position, and compute `tb_rank` / `tb_score` from the resulting DTZ
+    /// value and 50-move counter.  All four promotion types (Q/N/R/B) are
+    /// generated.  Moves are returned in generation order; the caller sorts
+    /// by `tb_rank` descending.
     ///
-    /// Same as `probe_root`, plus:
-    /// * `has_repeated` - Whether there has been a repetition
-    /// * `use_rule50` - Whether to use the 50-move rule
-    ///
-    /// # Returns
-    ///
-    /// `Some(RootMoves)` with ranked moves and PVs, or `None` if probe failed.
+    /// Returns `None` if castling rights are set, no legal moves exist, or
+    /// all child probes fail.
     #[allow(clippy::too_many_arguments)]
     pub fn probe_root_dtz(
         &self,
@@ -220,66 +228,86 @@ impl Tablebase {
             return None;
         }
 
-        let probe = self.probe_root(
-            white,
-            black,
-            kings,
-            queens,
-            rooks,
-            bishops,
-            knights,
-            pawns,
-            rule50,
-            castling_rights,
-            ep,
-            turn,
-            None,
+        let root = Pos::new(
+            white, black, kings, queens, rooks, bishops, knights, pawns,
+            rule50, ep, turn,
         );
-        if probe.is_failed() {
+        let legal = gen_legal_moves(&root);
+        if legal.is_empty() {
             return None;
         }
 
-        let mut score = probe.dtz();
-        if has_repeated && score > 0 {
-            score -= 1;
-        }
-        if !use_rule50 {
-            score = score.saturating_mul(2);
-        }
-
-        let candidates = generate_candidate_root_moves(
-            white, black, kings, queens, rooks, bishops, knights, pawns, ep, turn, 8,
-        );
+        let cnt50  = rule50 as i32;
+        let bound  = if use_rule50 { 900 } else { 1 };
         let mut moves = RootMoves::new();
-        for (idx, (from_sq, to_sq, promo)) in candidates.iter().enumerate() {
-            let candidate_score = if score > 0 {
-                score.saturating_sub(idx as i32)
-            } else if score < 0 {
-                score.saturating_add(idx as i32)
+
+        for (from, to, promo) in &legal {
+            let child = match root.do_move(*from, *to, *promo) {
+                Some(c) => c,
+                None    => continue,
+            };
+
+            // rule50 resets on capture/pawn → use WDL; otherwise use DTZ + adjust.
+            let v = if child.rule50 == 0 {
+                let wdl = match self.probe_wdl_pos(&child) {
+                    Some(w) => w,
+                    None    => continue,
+                };
+                WDL_TO_DTZ[(-wdl_to_int(wdl) + 2) as usize]
+            } else {
+                let dtz_child = match self.probe_dtz_pos(&child) {
+                    Some(d) => d,
+                    None    => continue,
+                };
+                let neg = -dtz_child;
+                if neg > 0 { neg + 1 } else if neg < 0 { neg - 1 } else { 0 }
+            };
+
+            // DTZ = 2 but child has no legal moves and is in check → mate in 1.
+            let v = if v == 2 && is_mate(&child) { 1 } else { v };
+
+            let tb_rank = if v > 0 {
+                if v + cnt50 <= 99 && !has_repeated { 1000 }
+                else { 1000 - (v + cnt50) }
+            } else if v < 0 {
+                if (-v) * 2 + cnt50 < 100 { -1000 }
+                else { -1000 + (-v + cnt50) }
             } else {
                 0
             };
-            let candidate = probe.with_from(*from_sq).with_to(*to_sq).with_promotion(*promo);
-            moves.push(make_ranked_root_move(
-                candidate,
-                candidate_score,
-                idx as i32,
-            ));
+
+            let tb_score = if tb_rank >= bound {
+                TB_VALUE_MATE - TB_MAX_MATE_PLY - 1
+            } else if tb_rank > 0 {
+                std::cmp::max(3, tb_rank - 800) * TB_VALUE_PAWN / 200
+            } else if tb_rank == 0 {
+                TB_VALUE_DRAW
+            } else if tb_rank > -bound {
+                std::cmp::min(-3, tb_rank + 800) * TB_VALUE_PAWN / 200
+            } else {
+                -(TB_VALUE_MATE - TB_MAX_MATE_PLY - 1)
+            };
+
+            let mv = Move::new(*from, *to, *promo);
+            let mut rm = RootMove::new(mv);
+            rm.tb_rank  = tb_rank;
+            rm.tb_score = tb_score;
+            rm.pv.push(mv);
+            moves.push(rm);
         }
 
-        if moves.is_empty() {
-            moves.push(make_ranked_root_move(probe, score, 0));
-        }
-        Some(moves)
+        if moves.is_empty() { None } else { Some(moves) }
     }
 
-    /// Probe root position using WDL tables and return ranked moves
+    /// Probe root position using WDL tables and return ranked moves.
     ///
-    /// This is a fallback when DTZ tables are missing.
+    /// Fallback when DTZ tables are unavailable.  Probes each legal move
+    /// individually (`root_probe_wdl` in the C reference): apply the move,
+    /// probe the child WDL, and look up `tb_rank` from
+    /// `WDL_TO_RANK = [-1000, -899, 0, 899, 1000]`.
     ///
-    /// # Returns
-    ///
-    /// `Some(RootMoves)` with ranked moves and PVs, or `None` if probe failed.
+    /// Returns `None` if castling rights are set, no legal moves exist, or
+    /// all child probes fail.
     #[allow(clippy::too_many_arguments)]
     pub fn probe_root_wdl(
         &self,
@@ -301,61 +329,70 @@ impl Tablebase {
             return None;
         }
 
-        let wdl = self.probe_wdl(
-            white,
-            black,
-            kings,
-            queens,
-            rooks,
-            bishops,
-            knights,
-            pawns,
-            rule50,
-            castling_rights,
-            ep,
-            turn,
-        )?;
-
-        let mut score: i32 = match wdl {
-            WdlValue::Win => 200,
-            WdlValue::CursedWin => 100,
-            WdlValue::Draw => 0,
-            WdlValue::BlessedLoss => -100,
-            WdlValue::Loss => -200,
-        };
-        if !use_rule50 {
-            score = score.saturating_mul(2);
+        let root = Pos::new(
+            white, black, kings, queens, rooks, bishops, knights, pawns,
+            rule50, ep, turn,
+        );
+        let legal = gen_legal_moves(&root);
+        if legal.is_empty() {
+            return None;
         }
 
         let mut moves = RootMoves::new();
-        let candidates = generate_candidate_root_moves(
-            white, black, kings, queens, rooks, bishops, knights, pawns, ep, turn, 8,
-        );
-        for (idx, (from_sq, to_sq, promo)) in candidates.iter().enumerate() {
-            let candidate_score = score.saturating_sub(idx as i32);
-            let synthetic = ProbeResult::from_raw(0)
-                .with_wdl(wdl)
-                .with_dtz(0)
-                .with_from(*from_sq)
-                .with_to(*to_sq)
-                .with_promotion(*promo);
-            moves.push(make_ranked_root_move(
-                synthetic,
-                candidate_score,
-                idx as i32,
-            ));
+
+        for (from, to, promo) in &legal {
+            let child = match root.do_move(*from, *to, *promo) {
+                Some(c) => c,
+                None    => continue,
+            };
+
+            let wdl_child = match self.probe_wdl_pos(&child) {
+                Some(w) => w,
+                None    => continue,
+            };
+            let v_raw = -wdl_to_int(wdl_child); // from our perspective
+            let v = if !use_rule50 {
+                if v_raw > 0 { 2 } else if v_raw < 0 { -2 } else { 0 }
+            } else {
+                v_raw
+            };
+
+            let tb_rank  = WDL_TO_RANK[(v + 2) as usize];
+            let tb_score = match v {
+                 2 =>  TB_VALUE_MATE - TB_MAX_MATE_PLY - 1,
+                 1 =>  TB_VALUE_DRAW + 2,
+                 0 =>  TB_VALUE_DRAW,
+                -1 =>  TB_VALUE_DRAW - 2,
+                _  => -(TB_VALUE_MATE - TB_MAX_MATE_PLY - 1),
+            };
+
+            let mv = Move::new(*from, *to, *promo);
+            let mut rm = RootMove::new(mv);
+            rm.tb_rank  = tb_rank;
+            rm.tb_score = tb_score;
+            rm.pv.push(mv);
+            moves.push(rm);
         }
 
-        if moves.is_empty() {
-            let (from_sq, to_sq) = synthesize_root_move_squares(white, black, turn);
-            let synthetic = ProbeResult::from_raw(0)
-                .with_wdl(wdl)
-                .with_dtz(0)
-                .with_from(from_sq)
-                .with_to(to_sq);
-            moves.push(make_ranked_root_move(synthetic, score, 0));
-        }
-        Some(moves)
+        if moves.is_empty() { None } else { Some(moves) }
+    }
+
+    // ── per-move probing helpers ─────────────────────────────────────────────
+
+    fn probe_wdl_pos(&self, pos: &Pos) -> Option<WdlValue> {
+        self.probe_wdl_impl(
+            pos.white, pos.black, pos.kings, pos.queens, pos.rooks,
+            pos.bishops, pos.knights, pos.pawns, pos.ep, pos.turn,
+        )
+    }
+
+    fn probe_dtz_pos(&self, pos: &Pos) -> Option<i32> {
+        let probe = self.probe_root_impl(
+            pos.white, pos.black, pos.kings, pos.queens, pos.rooks,
+            pos.bishops, pos.knights, pos.pawns,
+            0, pos.ep, pos.turn, None,
+        );
+        if probe.is_failed() { None } else { Some(probe.dtz()) }
     }
 
     // Internal implementation stubs
@@ -578,6 +615,7 @@ fn synthesize_root_move_squares(white: Bitboard, black: Bitboard, turn: Color) -
     (from, to)
 }
 
+#[cfg(test)]
 fn generate_candidate_root_moves(
     white: Bitboard,
     black: Bitboard,
@@ -765,6 +803,7 @@ fn generate_candidate_root_moves(
     out
 }
 
+#[cfg(test)]
 fn add_slider_moves(
     out: &mut Vec<(Square, Square, Promotion)>,
     from: Square,
@@ -792,6 +831,7 @@ fn add_slider_moves(
     }
 }
 
+#[cfg(test)]
 fn push_candidate(
     out: &mut Vec<(Square, Square, Promotion)>,
     candidate: (Square, Square, Promotion),
@@ -805,6 +845,7 @@ fn push_candidate(
     }
 }
 
+#[cfg(test)]
 fn offset_square(from: Square, file_delta: i8, rank_delta: i8) -> Option<Square> {
     let file = (from % 8) as i8;
     let rank = (from / 8) as i8;
@@ -816,13 +857,292 @@ fn offset_square(from: Square, file_delta: i8, rank_delta: i8) -> Option<Square>
     Some((nr as u8) * 8 + (nf as u8))
 }
 
-fn make_ranked_root_move(probe: ProbeResult, score: i32, rank: i32) -> RootMove {
-    let mv = Move::new(probe.from_square(), probe.to_square(), probe.promotion());
-    let mut root = RootMove::new(mv);
-    root.tb_score = score;
-    root.tb_rank = rank;
-    root.pv.push(mv);
-    root
+// ── per-move probing infrastructure ─────────────────────────────────────────
+
+/// Convert a `WdlValue` to an integer in -2..+2 (Loss=-2, Win=+2).
+fn wdl_to_int(wdl: WdlValue) -> i32 {
+    match wdl {
+        WdlValue::Loss        => -2,
+        WdlValue::BlessedLoss => -1,
+        WdlValue::Draw        =>  0,
+        WdlValue::CursedWin   =>  1,
+        WdlValue::Win         =>  2,
+    }
+}
+
+/// Apply the C `do_bb_move` bitboard operation: move the piece at `from` to
+/// `to`, clearing both squares first.
+#[inline]
+fn do_bb_move(b: u64, from: Square, to: Square) -> u64 {
+    let bit = (b >> from) & 1;
+    (b & !(1u64 << to) & !(1u64 << from)) | (bit << to)
+}
+
+/// Internal compact position state for move-application and probing.
+#[derive(Clone, Copy)]
+struct Pos {
+    white:   Bitboard,
+    black:   Bitboard,
+    kings:   Bitboard,
+    queens:  Bitboard,
+    rooks:   Bitboard,
+    bishops: Bitboard,
+    knights: Bitboard,
+    pawns:   Bitboard,
+    rule50:  u32,
+    ep:      Square,
+    turn:    Color,
+}
+
+impl Pos {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        white: Bitboard, black: Bitboard,
+        kings: Bitboard, queens: Bitboard, rooks: Bitboard,
+        bishops: Bitboard, knights: Bitboard, pawns: Bitboard,
+        rule50: u32, ep: Square, turn: Color,
+    ) -> Self {
+        Pos { white, black, kings, queens, rooks, bishops, knights, pawns, rule50, ep, turn }
+    }
+
+    /// Apply a move (from, to, promo) and return the new position.
+    /// Returns `None` if the move is illegal (own king left in check, or a
+    /// king would be captured — which never happens in legal positions).
+    fn do_move(&self, from: Square, to: Square, promo: Promotion) -> Option<Pos> {
+        let from_bit = 1u64 << from;
+        let to_bit   = 1u64 << to;
+        let was_pawn   = (self.pawns & from_bit) != 0;
+        let is_capture = ((self.white | self.black) & to_bit) != 0;
+        let is_ep      = was_pawn && self.ep != 0 && to == self.ep;
+
+        let mut pos = Pos {
+            white:   do_bb_move(self.white,   from, to),
+            black:   do_bb_move(self.black,   from, to),
+            kings:   do_bb_move(self.kings,   from, to),
+            queens:  do_bb_move(self.queens,  from, to),
+            rooks:   do_bb_move(self.rooks,   from, to),
+            bishops: do_bb_move(self.bishops, from, to),
+            knights: do_bb_move(self.knights, from, to),
+            pawns:   do_bb_move(self.pawns,   from, to),
+            rule50:  if was_pawn || is_capture || promo != Promotion::None { 0 }
+                     else { self.rule50 + 1 },
+            ep:      0,
+            turn:    if self.turn == Color::White { Color::Black } else { Color::White },
+        };
+
+        // Promotion: replace the pawn at `to` with the promoted piece.
+        if promo != Promotion::None {
+            pos.pawns &= !to_bit;
+            match promo {
+                Promotion::Queen  => pos.queens  |= to_bit,
+                Promotion::Rook   => pos.rooks   |= to_bit,
+                Promotion::Bishop => pos.bishops |= to_bit,
+                Promotion::Knight => pos.knights |= to_bit,
+                Promotion::None   => unreachable!(),
+            }
+        }
+
+        // En passant capture: remove the captured pawn behind the ep square.
+        if is_ep {
+            let cap_sq  = if self.turn == Color::White { to - 8 } else { to + 8 };
+            let cap_bit = 1u64 << cap_sq;
+            pos.white &= !cap_bit;
+            pos.black &= !cap_bit;
+            pos.pawns &= !cap_bit;
+        }
+
+        // Set new ep square on double pawn push (only if opponent can capture).
+        if was_pawn && promo == Promotion::None {
+            let fr = from / 8;
+            let tr = to   / 8;
+            if self.turn == Color::White && fr == 1 && tr == 3 {
+                let ep_sq = from + 8;
+                let atk = crate::helper::pawn_attacks(ep_sq, Color::White);
+                if atk & pos.pawns & pos.black != 0 { pos.ep = ep_sq; }
+            } else if self.turn == Color::Black && fr == 6 && tr == 4 {
+                let ep_sq = from - 8;
+                let atk = crate::helper::pawn_attacks(ep_sq, Color::Black);
+                if atk & pos.pawns & pos.white != 0 { pos.ep = ep_sq; }
+            }
+        }
+
+        // Reject if a king was removed (e.g. illegal test position).
+        if pos.kings & pos.white == 0 || pos.kings & pos.black == 0 {
+            return None;
+        }
+
+        // Reject if the moving side's king is left in check.
+        if pos.is_in_check(self.turn) {
+            return None;
+        }
+
+        Some(pos)
+    }
+
+    /// Return true if `color`'s king is attacked by the opposing side.
+    fn is_in_check(&self, color: Color) -> bool {
+        let own = if color == Color::White { self.white } else { self.black };
+        let opp = if color == Color::White { self.black } else { self.white };
+        let king_bb = self.kings & own;
+        if king_bb == 0 { return false; }
+        let king_sq = king_bb.trailing_zeros() as Square;
+        let occ = self.white | self.black;
+
+        // Rook / queen (straight lines)
+        if crate::helper::rook_attacks(king_sq, occ) & ((self.rooks | self.queens) & opp) != 0 {
+            return true;
+        }
+        // Bishop / queen (diagonals)
+        if crate::helper::bishop_attacks(king_sq, occ) & ((self.bishops | self.queens) & opp) != 0 {
+            return true;
+        }
+        // Knight
+        if crate::helper::knight_attacks(king_sq) & (self.knights & opp) != 0 {
+            return true;
+        }
+        // Pawn — a pawn of `opp` on a square that attacks `king_sq`
+        if crate::helper::pawn_attacks(king_sq, color) & (self.pawns & opp) != 0 {
+            return true;
+        }
+        // King (adjacent)
+        if crate::helper::king_attacks(king_sq) & (self.kings & opp) != 0 {
+            return true;
+        }
+        false
+    }
+}
+
+/// Generate all pseudo-legal moves for the side to move.
+/// Promotions emit all four piece types (Q, N, R, B).
+/// King captures are excluded (they cannot arise in legal positions).
+fn gen_pseudo_legal_moves(pos: &Pos) -> Vec<(Square, Square, Promotion)> {
+    let own      = if pos.turn == Color::White { pos.white } else { pos.black };
+    let opp      = if pos.turn == Color::White { pos.black } else { pos.white };
+    let occ      = pos.white | pos.black;
+    let opp_king = pos.kings & opp;
+    let mut out  = Vec::new();
+
+    // King
+    let mut bb = pos.kings & own;
+    while bb != 0 {
+        let from = bb.trailing_zeros() as Square;
+        bb &= bb - 1;
+        let mut atk = crate::helper::king_attacks(from) & !own & !opp_king;
+        while atk != 0 {
+            let to = atk.trailing_zeros() as Square; atk &= atk - 1;
+            out.push((from, to, Promotion::None));
+        }
+    }
+    // Queens
+    let mut bb = pos.queens & own;
+    while bb != 0 {
+        let from = bb.trailing_zeros() as Square;
+        bb &= bb - 1;
+        let mut atk = crate::helper::queen_attacks(from, occ) & !own & !opp_king;
+        while atk != 0 {
+            let to = atk.trailing_zeros() as Square; atk &= atk - 1;
+            out.push((from, to, Promotion::None));
+        }
+    }
+    // Rooks
+    let mut bb = pos.rooks & own;
+    while bb != 0 {
+        let from = bb.trailing_zeros() as Square;
+        bb &= bb - 1;
+        let mut atk = crate::helper::rook_attacks(from, occ) & !own & !opp_king;
+        while atk != 0 {
+            let to = atk.trailing_zeros() as Square; atk &= atk - 1;
+            out.push((from, to, Promotion::None));
+        }
+    }
+    // Bishops
+    let mut bb = pos.bishops & own;
+    while bb != 0 {
+        let from = bb.trailing_zeros() as Square;
+        bb &= bb - 1;
+        let mut atk = crate::helper::bishop_attacks(from, occ) & !own & !opp_king;
+        while atk != 0 {
+            let to = atk.trailing_zeros() as Square; atk &= atk - 1;
+            out.push((from, to, Promotion::None));
+        }
+    }
+    // Knights
+    let mut bb = pos.knights & own;
+    while bb != 0 {
+        let from = bb.trailing_zeros() as Square;
+        bb &= bb - 1;
+        let mut atk = crate::helper::knight_attacks(from) & !own & !opp_king;
+        while atk != 0 {
+            let to = atk.trailing_zeros() as Square; atk &= atk - 1;
+            out.push((from, to, Promotion::None));
+        }
+    }
+    // Pawns
+    let back_rank:  u8 = if pos.turn == Color::White { 7 } else { 0 };
+    let start_rank: u8 = if pos.turn == Color::White { 1 } else { 6 };
+    let step:       i8 = if pos.turn == Color::White { 1 } else { -1 };
+
+    let mut bb = pos.pawns & own;
+    while bb != 0 {
+        let from = bb.trailing_zeros() as Square;
+        bb &= bb - 1;
+        let fr = from / 8;
+        let ff = from % 8;
+
+        // Single push
+        let tr = (fr as i8 + step) as u8;
+        if tr < 8 {
+            let to = tr * 8 + ff;
+            if occ & (1u64 << to) == 0 {
+                push_pawn_move(&mut out, from, to, tr, back_rank);
+                // Double push from starting rank
+                if fr == start_rank {
+                    let tr2 = (tr as i8 + step) as u8;
+                    if tr2 < 8 {
+                        let to2 = tr2 * 8 + ff;
+                        if occ & (1u64 << to2) == 0 {
+                            out.push((from, to2, Promotion::None));
+                        }
+                    }
+                }
+            }
+        }
+        // Captures (including en passant); never capture the opponent's king.
+        let ep_bit = if pos.ep != 0 { 1u64 << pos.ep } else { 0 };
+        let mut caps = crate::helper::pawn_attacks(from, pos.turn)
+            & ((opp & !opp_king) | ep_bit);
+        while caps != 0 {
+            let to = caps.trailing_zeros() as Square; caps &= caps - 1;
+            push_pawn_move(&mut out, from, to, to / 8, back_rank);
+        }
+    }
+    out
+}
+
+fn push_pawn_move(
+    out: &mut Vec<(Square, Square, Promotion)>,
+    from: Square, to: Square, to_rank: u8, back_rank: u8,
+) {
+    if to_rank == back_rank {
+        for &p in &[Promotion::Queen, Promotion::Knight, Promotion::Rook, Promotion::Bishop] {
+            out.push((from, to, p));
+        }
+    } else {
+        out.push((from, to, Promotion::None));
+    }
+}
+
+/// Filter pseudo-legal moves to legal ones (king not in check after move).
+fn gen_legal_moves(pos: &Pos) -> Vec<(Square, Square, Promotion)> {
+    gen_pseudo_legal_moves(pos)
+        .into_iter()
+        .filter(|(f, t, p)| pos.do_move(*f, *t, *p).is_some())
+        .collect()
+}
+
+/// True if `pos` is checkmate: the side to move is in check with no legal moves.
+fn is_mate(pos: &Pos) -> bool {
+    pos.is_in_check(pos.turn) && gen_legal_moves(pos).is_empty()
 }
 
 fn flip_wdl(wdl: WdlValue) -> WdlValue {
@@ -1073,10 +1393,9 @@ mod tests {
             .expect("dtz root probing should succeed");
 
         assert!(!ranked.is_empty());
-        assert!(ranked.len() <= 8);
         let first = ranked.moves.first().expect("ranked move should exist");
         assert!(!first.pv.is_empty());
-        assert_eq!(first.tb_rank, 0);
+        assert!(first.tb_rank >= -1000 && first.tb_rank <= 1000);
 
         std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
     }
@@ -1109,11 +1428,9 @@ mod tests {
             .expect("wdl root probing should succeed");
 
         assert!(!ranked.is_empty());
-        assert!(ranked.len() <= 8);
         let first = ranked.moves.first().expect("ranked move should exist");
-        assert_eq!(first.tb_rank, 0);
-        assert_eq!(first.mv.from_square(), 0);
-        assert_eq!(first.mv.to_square(), 1);
+        assert!(!first.pv.is_empty());
+        assert!(first.tb_rank >= -1000 && first.tb_rank <= 1000);
 
         std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
     }
@@ -1183,8 +1500,9 @@ mod tests {
             .expect("wdl root probing should succeed");
 
         assert!(ranked.len() >= 2);
-        for (i, mv) in ranked.moves.iter().enumerate() {
-            assert_eq!(mv.tb_rank, i as i32);
+        for mv in ranked.moves.iter() {
+            assert!(mv.tb_rank >= -1000 && mv.tb_rank <= 1000);
+            assert!(!mv.pv.is_empty());
         }
 
         std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
