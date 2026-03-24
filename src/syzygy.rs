@@ -365,7 +365,7 @@ pub(crate) fn parse_material_key(key: &str) -> Option<TableMeta> {
     }
 
     let num: usize = pcs.iter().map(|&x| x as usize).sum();
-    if num < 2 || num > TB_PIECES {
+    if !(2..=TB_PIECES).contains(&num) {
         return None;
     }
 
@@ -422,6 +422,7 @@ struct EncInfo {
 // ── PairsData ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug)]
+#[derive(Default)]
 struct PairsData {
     is_const: bool,
     const_value: [u8; 2],
@@ -446,27 +447,6 @@ struct PairsData {
     data_size: usize,       // bytes
 }
 
-impl Default for PairsData {
-    fn default() -> Self {
-        PairsData {
-            is_const: false,
-            const_value: [0; 2],
-            block_size: 0,
-            idx_bits: 0,
-            min_len: 0,
-            sym_len: Vec::new(),
-            base: Vec::new(),
-            sym_pat_off: 0,
-            offset_arr_off: 0,
-            index_table_off: 0,
-            size_table_off: 0,
-            data_off: 0,
-            idx_table_size: 0,
-            size_table_size: 0,
-            data_size: 0,
-        }
-    }
-}
 
 /// Parse a PairsData header from `data[off..]`.
 /// Returns (parsed PairsData, new offset after the sym_pat section, flags byte).

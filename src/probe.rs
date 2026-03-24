@@ -47,7 +47,7 @@ impl Tablebase {
         let sep = if cfg!(windows) { ';' } else { ':' };
         let dirs: Vec<&Path> = path_str
             .split(sep)
-            .map(|s| Path::new(s))
+            .map(Path::new)
             .collect();
 
         let index = if dirs.len() == 1 {

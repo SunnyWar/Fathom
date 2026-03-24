@@ -270,10 +270,7 @@ pub(crate) fn try_mmap(path: &Path) -> Option<Mmap> {
 /// Simplified test format:
 /// - bytes [0..4] are header magic
 /// - bytes [4..] are direct WDL entries encoded as 0..=4
-pub(crate) fn probe_wdl_value(
-    data: &[u8],
-    key: u64,
-) -> Result<Option<WdlValue>, LoaderError> {
+pub(crate) fn probe_wdl_value(data: &[u8], key: u64) -> Result<Option<WdlValue>, LoaderError> {
     if data.len() <= 4 {
         return Err(LoaderError::InvalidWdlPayload {
             path: PathBuf::new(),
@@ -316,11 +313,12 @@ fn parse_table_header(path: &Path) -> Result<TableHeader, LoaderError> {
         source,
     })?;
     // SAFETY: read-only, file not mutated.
-    let mmap = unsafe { memmap2::MmapOptions::new().map(&file) }
-        .map_err(|source| LoaderError::MapFileFailed {
+    let mmap = unsafe { memmap2::MmapOptions::new().map(&file) }.map_err(|source| {
+        LoaderError::MapFileFailed {
             path: path.to_path_buf(),
             source,
-        })?;
+        }
+    })?;
     let len = mmap.len() as u64;
     if len < 4 {
         return Err(LoaderError::InvalidHeaderTooSmall {
@@ -329,7 +327,10 @@ fn parse_table_header(path: &Path) -> Result<TableHeader, LoaderError> {
         });
     }
     let magic = [mmap[0], mmap[1], mmap[2], mmap[3]];
-    Ok(TableHeader { magic, file_len: len })
+    Ok(TableHeader {
+        magic,
+        file_len: len,
+    })
 }
 
 fn parse_table_filename(file_name: &str) -> Option<(String, TableKind, usize)> {
