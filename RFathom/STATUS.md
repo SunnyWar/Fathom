@@ -59,9 +59,9 @@ RFathom is a Rust port of the [Fathom](https://github.com/jdart1/Fathom) Syzygy 
 - ✅ Pawn double push from starting rank
 - ✅ En passant capture generation
 - ✅ Pawn promotion to queen on back rank
-- ✅ `probe_root_dtz()` — DTZ-ranked root moves
-- ✅ `probe_root_wdl()` — WDL-ranked root moves
-- ✅ Score adjustment for 50-move rule
+- ✅ `Tablebase::probe_root_dtz()` — per-move DTZ ranking with correct `tb_rank`/`tb_score`
+- ✅ `Tablebase::probe_root_wdl()` — per-move WDL ranking with `WDL_TO_RANK` lookup
+- ✅ Legal move generation: `Pos`, `do_move`, `gen_legal_moves`, all 4 promotion types
 
 ### 🗜️ Real Syzygy Binary Format Decoder (`syzygy.rs`)
 - ✅ WDL magic: `0x5d23e871` / DTZ magic: `0xa50c66d7`
@@ -123,7 +123,7 @@ RFathom/
 
 ```
 ✅ cargo build       — compiles (warnings suppressed with #[allow])
-✅ cargo test        — 54 tests pass (45 unit + 8 integration + 1 doc)
+✅ cargo test        — 54 tests pass (45 unit + 8 integration + 1 doc), zero warnings
 ✅ cargo doc         — documentation generated
 ```
 
@@ -141,14 +141,17 @@ RFathom/
 - [x] `calc_sym_len` handles real tables without recursion issues
 - Tests skip gracefully with a warning when files are missing (`SYZYGY_PATH` env var overrides default path)
 
-### 🚧 Move Generation Completeness (Medium Priority)
-- [ ] Full legal-move generation with check filtering (currently pseudo-legal)
-- [ ] Under-promotion moves (knight, bishop, rook promotions)
-- [ ] Castling detection/exclusion is present but promotion types limited
+### ✅ Per-Move Root Probing (Complete)
+- [x] `Pos` struct + `do_bb_move` + `do_move` with legality check (`is_in_check`)
+- [x] `gen_pseudo_legal_moves` / `gen_legal_moves` / `is_mate`
+- [x] All four promotion types (Q/N/R/B) generated for pawn moves to back rank
+- [x] `probe_root_dtz` — applies each legal move, probes child DTZ/WDL, computes `tb_rank` / `tb_score` using Fathom C reference formula
+- [x] `probe_root_wdl` — applies each legal move, probes child WDL, uses `WDL_TO_RANK = [-1000, -899, 0, 899, 1000]`
+- [x] `tb_score` computed from `tb_rank` matching Fathom C
 
-### 🚧 PV Extension (Medium Priority)
-- [ ] Extend PV beyond root by probing successor positions iteratively
-- [ ] Iterative deepening for PV line construction
+### ✅ PV Extension (Not Required)
+- Reckless does not read the PV array (`pvSize` always 0, never accessed)
+- Root moves are sorted by `tb_rank` by the engine — no iterative PV needed
 
 ### 🚧 Optimization (Low Priority)
 - [ ] Pre-computed attack lookup tables (currently computed on-the-fly)
