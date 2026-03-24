@@ -144,14 +144,11 @@ cargo run --example helper_api --features helper-api
 - Unit tests for each module
 - Doc tests for public API examples
 - Integration tests for complete workflows (when implementation is done)
-- Benchmark suite for performance-critical paths (future)
+Benchmark suite for performance-critical paths (benches/ directory, Criterion.rs)
+Performance benchmarks (benches/ directory, Criterion.rs)
 
 ## Contributing
 
-When implementing the missing functionality:
-
-1. Follow existing code style and patterns
-2. Add unit tests for new functions
 3. Update documentation
 4. Ensure `cargo test` passes
 5. Run `cargo clippy` for linting

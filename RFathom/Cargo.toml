@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["RFathom Contributors"]
 license = "MIT"
 description = "A Rust implementation of Syzygy tablebase probing (Fathom port)"
-repository = "https://github.com/jdart1/Fathom"
+repository = "https://github.com/SunnyWar/Fathom"
 keywords = ["chess", "tablebase", "syzygy", "endgame"]
 categories = ["games"]
 
@@ -13,6 +13,7 @@ categories = ["games"]
 memmap2 = "0.9"
 
 [dev-dependencies]
+criterion = "*"
 
 [features]
 default = ["helper-api"]

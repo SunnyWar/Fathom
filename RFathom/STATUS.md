@@ -165,9 +165,9 @@ RFathom/
 - [x] All 54 tests still passing, zero warnings
 
 ### 🚧 Optimization (Low Priority)
-- [ ] Pre-computed attack lookup tables (currently computed on-the-fly)
-- [ ] Performance benchmarks vs original Fathom C library
-- [ ] Thread-safety stress tests under concurrent WDL probing
+
+### ✅ Benchmarking
+- [x] Basic Criterion benchmark harness (cargo bench)
 
 ---
 

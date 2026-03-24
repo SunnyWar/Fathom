@@ -158,6 +158,16 @@ Available castling constants:
 
 ## Thread Safety
 
+## Benchmarking
+
+RFathom uses [Criterion.rs](https://github.com/bheisler/criterion.rs) for benchmarking. To run the benchmarks and track performance improvements:
+
+```sh
+cargo bench
+```
+
+This will execute all benchmarks in the `benches/` directory. You can add new benchmarks to `benches/basic.rs` or create additional files in the same directory. Benchmarks help confirm and track future performance improvements.
+
 - `probe_wdl()` - Thread-safe, can be called during parallel search
 - `probe_root()`, `probe_root_dtz()`, `probe_root_wdl()` - NOT thread-safe, should only be called at the root
 
