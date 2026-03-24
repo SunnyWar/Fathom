@@ -132,22 +132,19 @@ const DEFAULT_PATH: &str = r"C:\Syzygy";
 fn try_load() -> Option<Tablebase> {
     let path = std::env::var("SYZYGY_PATH").unwrap_or_else(|_| DEFAULT_PATH.to_string());
     if !std::path::Path::new(&path).is_dir() {
-        eprintln!(
-            "\nWARNING: Syzygy directory not found at '{}' — skipping integration test\n\
-             (set SYZYGY_PATH env var to override)",
-            path
+        panic!(
+            "Syzygy directory not found at '{}'.\n\
+            Please download the Syzygy tablebases and place them in '{}' (or set SYZYGY_PATH env var) to run integration tests.",
+            path, path
         );
-        return None;
     }
     let tb = Tablebase::new();
     match tb.init(&path) {
         Err(e) => {
-            eprintln!("\nWARNING: tb.init({path}) failed: {e} — skipping\n");
-            None
+            panic!("Syzygy tablebase init failed for '{}': {}", path, e);
         }
         Ok(_) if tb.largest() == 0 => {
-            eprintln!("\nWARNING: No Syzygy files were loaded from '{path}' — skipping\n");
-            None
+            panic!("No Syzygy files were loaded from '{}'. Please ensure the directory contains valid Syzygy tablebase files.", path);
         }
         Ok(_) => Some(tb),
     }

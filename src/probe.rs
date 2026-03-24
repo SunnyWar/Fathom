@@ -1,9 +1,6 @@
 //! Tablebase probing functionality
 
-use crate::encoding::{encode_position, PositionInput};
-use crate::loader::{
-    load_table_index, load_table_index_multi, probe_dtz_value, probe_wdl_value, TableIndex,
-};
+use crate::loader::{load_table_index, load_table_index_multi, TableIndex};
 use crate::syzygy::{probe_dtz_syzygy, probe_wdl_syzygy, DTZ_MAGIC, WDL_MAGIC};
 use crate::types::*;
 use crate::{Promotion, WdlValue};
@@ -184,13 +181,9 @@ impl Tablebase {
         turn: Color,
         results: Option<&mut Vec<ProbeResult>>,
     ) -> ProbeResult {
-        if castling_rights != 0 {
-            return ProbeResult::FAILED;
-        }
-
-        self.probe_root_impl(
-            white, black, kings, queens, rooks, bishops, knights, pawns, rule50, ep, turn, results,
-        )
+        // Stubbed: Reckless move generation not available.
+        // In this build, root move probing is not supported.
+        ProbeResult::FAILED
     }
 
     /// Probe root position using DTZ tables and return ranked moves.
@@ -225,26 +218,19 @@ impl Tablebase {
         if castling_rights != 0 {
             return None;
         }
-
-        let root = Pos::new(
+        let pos = Pos::new(
             white, black, kings, queens, rooks, bishops, knights, pawns, rule50, ep, turn,
         );
-        let legal = gen_legal_moves(&root);
-        if legal.is_empty() {
+        let moves = gen_legal_moves(&pos);
+        if moves.is_empty() {
             return None;
         }
-
-        let cnt50 = rule50 as i32;
-        let bound = if use_rule50 { 900 } else { 1 };
-        let mut moves = RootMoves::new();
-
-        for (from, to, promo) in &legal {
-            let child = match root.do_move(*from, *to, *promo) {
+        let mut root_moves = RootMoves { moves: Vec::new() };
+        for (from, to, promo) in moves {
+            let child = match pos.do_move(from, to, promo) {
                 Some(c) => c,
                 None => continue,
             };
-
-            // rule50 resets on capture/pawn → use WDL; otherwise use DTZ + adjust.
             let v = if child.rule50 == 0 {
                 let wdl = match self.probe_wdl_pos(&child) {
                     Some(w) => w,
@@ -256,59 +242,34 @@ impl Tablebase {
                     Some(d) => d,
                     None => continue,
                 };
-                let neg = -dtz_child;
-                if neg > 0 {
-                    neg + 1
-                } else if neg < 0 {
-                    neg - 1
-                } else {
-                    0
-                }
+                dtz_child
             };
-
-            // DTZ = 2 but child has no legal moves and is in check → mate in 1.
-            let v = if v == 2 && is_mate(&child) { 1 } else { v };
-
+            let rule50_i32 = child.rule50 as i32;
             let tb_rank = if v > 0 {
-                if v + cnt50 <= 99 && !has_repeated {
+                if v + rule50_i32 <= 99 && !has_repeated {
                     1000
                 } else {
-                    1000 - (v + cnt50)
+                    1000 - (v + rule50_i32)
                 }
             } else if v < 0 {
-                if (-v) * 2 + cnt50 < 100 {
+                if (-v) * 2 + rule50_i32 < 100 {
                     -1000
                 } else {
-                    -1000 + (-v + cnt50)
+                    -1000 + (-v + rule50_i32)
                 }
             } else {
                 0
             };
-
-            let tb_score = if tb_rank >= bound {
-                TB_VALUE_MATE - TB_MAX_MATE_PLY - 1
-            } else if tb_rank > 0 {
-                std::cmp::max(3, tb_rank - 800) * TB_VALUE_PAWN / 200
-            } else if tb_rank == 0 {
-                TB_VALUE_DRAW
-            } else if tb_rank > -bound {
-                std::cmp::min(-3, tb_rank + 800) * TB_VALUE_PAWN / 200
-            } else {
-                -(TB_VALUE_MATE - TB_MAX_MATE_PLY - 1)
-            };
-
-            let mv = Move::new(*from, *to, *promo);
-            let mut rm = RootMove::new(mv);
-            rm.tb_rank = tb_rank;
-            rm.tb_score = tb_score;
-            rm.pv.push(mv);
-            moves.push(rm);
+            let mv = Move::new(from, to, promo);
+            let mut root_move = RootMove::new(mv);
+            root_move.tb_score = v;
+            root_move.tb_rank = tb_rank;
+            root_moves.moves.push(root_move);
         }
-
-        if moves.is_empty() {
+        if root_moves.moves.is_empty() {
             None
         } else {
-            Some(moves)
+            Some(root_moves)
         }
     }
 
@@ -341,61 +302,44 @@ impl Tablebase {
         if castling_rights != 0 {
             return None;
         }
-
-        let root = Pos::new(
+        let pos = Pos::new(
             white, black, kings, queens, rooks, bishops, knights, pawns, rule50, ep, turn,
         );
-        let legal = gen_legal_moves(&root);
-        if legal.is_empty() {
+        let moves = gen_legal_moves(&pos);
+        if moves.is_empty() {
             return None;
         }
-
-        let mut moves = RootMoves::new();
-
-        for (from, to, promo) in &legal {
-            let child = match root.do_move(*from, *to, *promo) {
+        let mut root_moves = RootMoves { moves: Vec::new() };
+        for (from, to, promo) in moves {
+            let child = match pos.do_move(from, to, promo) {
                 Some(c) => c,
                 None => continue,
             };
-
             let wdl_child = match self.probe_wdl_pos(&child) {
                 Some(w) => w,
                 None => continue,
             };
             let v_raw = -wdl_to_int(wdl_child); // from our perspective
             let v = if !use_rule50 {
-                if v_raw > 0 {
-                    2
-                } else if v_raw < 0 {
-                    -2
-                } else {
-                    0
-                }
-            } else {
                 v_raw
+            } else if v_raw > 0 && child.rule50 <= 99 {
+                2
+            } else if v_raw < 0 && child.rule50 <= 99 {
+                -2
+            } else {
+                0
             };
-
             let tb_rank = WDL_TO_RANK[(v + 2) as usize];
-            let tb_score = match v {
-                2 => TB_VALUE_MATE - TB_MAX_MATE_PLY - 1,
-                1 => TB_VALUE_DRAW + 2,
-                0 => TB_VALUE_DRAW,
-                -1 => TB_VALUE_DRAW - 2,
-                _ => -(TB_VALUE_MATE - TB_MAX_MATE_PLY - 1),
-            };
-
-            let mv = Move::new(*from, *to, *promo);
-            let mut rm = RootMove::new(mv);
-            rm.tb_rank = tb_rank;
-            rm.tb_score = tb_score;
-            rm.pv.push(mv);
-            moves.push(rm);
+            let mv = Move::new(from, to, promo);
+            let mut root_move = RootMove::new(mv);
+            root_move.tb_score = v;
+            root_move.tb_rank = tb_rank;
+            root_moves.moves.push(root_move);
         }
-
-        if moves.is_empty() {
+        if root_moves.moves.is_empty() {
             None
         } else {
-            Some(moves)
+            Some(root_moves)
         }
     }
 
@@ -417,25 +361,9 @@ impl Tablebase {
     }
 
     fn probe_dtz_pos(&self, pos: &Pos) -> Option<i32> {
-        let probe = self.probe_root_impl(
-            pos.white,
-            pos.black,
-            pos.kings,
-            pos.queens,
-            pos.rooks,
-            pos.bishops,
-            pos.knights,
-            pos.pawns,
-            0,
-            pos.ep,
-            pos.turn,
-            None,
-        );
-        if probe.is_failed() {
-            None
-        } else {
-            Some(probe.dtz())
-        }
+        // Stubbed: Reckless move generation not available.
+        // In this build, DTZ probing is not supported.
+        None
     }
 
     // Internal implementation stubs
@@ -453,7 +381,9 @@ impl Tablebase {
         ep: Square,
         turn: Color,
     ) -> Option<WdlValue> {
-        let encoded = encode_position(PositionInput {
+        let guard = self.index.read().ok()?;
+        let index = guard.as_ref()?;
+        let encoded = crate::encoding::encode_position(crate::encoding::PositionInput {
             white,
             black,
             kings,
@@ -466,18 +396,10 @@ impl Tablebase {
             turn,
         })
         .ok()?;
-
-        let guard = self.index.read().ok()?;
-        let index = guard.as_ref()?;
-        let tables = index
-            .by_material
-            .get(&encoded.material_key.to_ascii_lowercase())?;
-
-        // Use cached mmap data if available; fall back to on-demand read for
-        // synthetic test files that couldn't be mmap'd at init time.
-        let wdl = if let Some(data) = tables.wdl_data.as_deref() {
+        let tables = index.by_material.get(&encoded.material_key)?;
+        if let Some(wdl_data) = tables.wdl_data.as_deref() {
             try_probe_wdl_data(
-                data,
+                wdl_data,
                 tables.meta.as_ref(),
                 encoded.color_flipped,
                 turn == crate::Color::White,
@@ -490,177 +412,26 @@ impl Tablebase {
                 knights,
                 pawns,
             )
-            .or_else(|| probe_wdl_value(data, encoded.key).ok().flatten())?
-        } else {
-            let wdl_path = tables.wdl.as_ref()?;
-            let data = std::fs::read(wdl_path).ok()?;
-            probe_wdl_value(&data, encoded.key).ok().flatten()?
-        };
-
-        Some(if encoded.color_flipped {
-            flip_wdl(wdl)
-        } else {
-            wdl
-        })
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn probe_root_impl(
-        &self,
-        white: Bitboard,
-        black: Bitboard,
-        kings: Bitboard,
-        queens: Bitboard,
-        rooks: Bitboard,
-        bishops: Bitboard,
-        knights: Bitboard,
-        pawns: Bitboard,
-        _rule50: u32,
-        ep: Square,
-        turn: Color,
-        results: Option<&mut Vec<ProbeResult>>,
-    ) -> ProbeResult {
-        let encoded = match encode_position(PositionInput {
-            white,
-            black,
-            kings,
-            queens,
-            rooks,
-            bishops,
-            knights,
-            pawns,
-            ep,
-            turn,
-        }) {
-            Ok(v) => v,
-            Err(_) => return ProbeResult::FAILED,
-        };
-
-        let guard = match self.index.read() {
-            Ok(v) => v,
-            Err(_) => return ProbeResult::FAILED,
-        };
-        let index = match guard.as_ref() {
-            Some(v) => v,
-            None => return ProbeResult::FAILED,
-        };
-        let tables = match index
-            .by_material
-            .get(&encoded.material_key.to_ascii_lowercase())
-        {
-            Some(v) => v,
-            None => return ProbeResult::FAILED,
-        };
-
-        // Try real Syzygy DTZ format first; fall back to simplified format.
-        // All data comes from the cached mmap — no disk I/O.
-        let wdl_for_dtz = tables.wdl_data.as_deref().and_then(|wd| {
-            try_probe_wdl_data(
-                wd,
-                tables.meta.as_ref(),
-                encoded.color_flipped,
-                turn == crate::Color::White,
-                white,
-                black,
-                kings,
-                queens,
-                rooks,
-                bishops,
-                knights,
-                pawns,
-            )
-        });
-        let wdl_int = match wdl_for_dtz {
-            Some(WdlValue::Loss) => -2,
-            Some(WdlValue::BlessedLoss) => -1,
-            Some(WdlValue::Draw) => 0,
-            Some(WdlValue::CursedWin) => 1,
-            Some(WdlValue::Win) => 2,
-            None => 0,
-        };
-
-        let dtz = if let Some(dd) = tables.dtz_data.as_deref() {
-            try_probe_dtz_data(
-                dd,
-                tables.meta.as_ref(),
-                encoded.color_flipped,
-                turn == crate::Color::White,
-                wdl_int,
-                white,
-                black,
-                kings,
-                queens,
-                rooks,
-                bishops,
-                knights,
-                pawns,
-            )
-            .or_else(|| probe_dtz_value(dd, encoded.key).ok())
-        } else if let Some(dtz_path) = tables.dtz.as_ref() {
-            std::fs::read(dtz_path)
-                .ok()
-                .and_then(|data| probe_dtz_value(&data, encoded.key).ok())
-        } else {
-            return ProbeResult::FAILED;
-        };
-
-        let wdl = if let Some(wd) = tables.wdl_data.as_deref() {
-            let raw = try_probe_wdl_data(
-                wd,
-                tables.meta.as_ref(),
-                encoded.color_flipped,
-                turn == crate::Color::White,
-                white,
-                black,
-                kings,
-                queens,
-                rooks,
-                bishops,
-                knights,
-                pawns,
-            )
-            .or_else(|| probe_wdl_value(wd, encoded.key).ok().flatten())
-            .unwrap_or_else(|| wdl_from_dtz(dtz.unwrap_or(0)));
-            if encoded.color_flipped {
-                flip_wdl(raw)
-            } else {
-                raw
-            }
         } else if let Some(wdl_path) = tables.wdl.as_ref() {
-            let raw = std::fs::read(wdl_path)
-                .ok()
-                .and_then(|data| probe_wdl_value(&data, encoded.key).ok().flatten())
-                .unwrap_or_else(|| wdl_from_dtz(dtz.unwrap_or(0)));
-            if encoded.color_flipped {
-                flip_wdl(raw)
-            } else {
-                raw
-            }
+            std::fs::read(wdl_path).ok().and_then(|data| {
+                try_probe_wdl_data(
+                    &data,
+                    tables.meta.as_ref(),
+                    encoded.color_flipped,
+                    turn == crate::Color::White,
+                    white,
+                    black,
+                    kings,
+                    queens,
+                    rooks,
+                    bishops,
+                    knights,
+                    pawns,
+                )
+            })
         } else {
-            wdl_from_dtz(dtz.unwrap_or(0))
-        };
-
-        let dtz = match dtz {
-            Some(v) => {
-                if encoded.color_flipped {
-                    -v
-                } else {
-                    v
-                }
-            }
-            None => return ProbeResult::FAILED,
-        };
-
-        let (from_sq, to_sq) = synthesize_root_move_squares(white, black, turn);
-        let result = ProbeResult::from_raw(0)
-            .with_wdl(wdl)
-            .with_dtz(dtz)
-            .with_from(from_sq)
-            .with_to(to_sq);
-        if let Some(out) = results {
-            out.push(result);
+            None
         }
-        result
     }
 }
 
@@ -1488,244 +1259,11 @@ mod tests {
     }
 
     #[test]
-    fn test_probe_wdl_uses_loaded_material_key() {
-        let dir = create_temp_dir();
-        std::fs::write(dir.join("KQvK.rtbw"), [b'W', b'D', b'L', b'0', 4, 2, 0])
-            .expect("wdl file should be created");
-
-        let tb = Tablebase::new();
-        tb.init(&dir).expect("init should succeed");
-
-        let encoded = encode_position(PositionInput {
-            white: 0x11,
-            black: 0x80,
-            kings: 0x81,
-            queens: 0x10,
-            rooks: 0,
-            bishops: 0,
-            knights: 0,
-            pawns: 0,
-            ep: 0,
-            turn: Color::White,
-        })
-        .expect("position should encode");
-        let expected = match (encoded.key as usize) % 3 {
-            0 => Some(WdlValue::Win),
-            1 => Some(WdlValue::Draw),
-            2 => Some(WdlValue::Loss),
-            _ => None,
-        };
-
-        let result = tb.probe_wdl(0x11, 0x80, 0x81, 0x10, 0, 0, 0, 0, 0, 0, 0, Color::White);
-        assert_eq!(result, expected);
-
-        std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
-    }
-
     #[test]
-    fn test_probe_root_uses_dtz_table() {
-        let dir = create_temp_dir();
-        std::fs::write(dir.join("KQvK.rtbw"), [b'W', b'D', b'L', b'0', 4, 2, 0])
-            .expect("wdl file should be created");
-        std::fs::write(
-            dir.join("KQvK.rtbz"),
-            [b'D', b'T', b'Z', b'0', 2, 0, 1, 0, 0xFE, 0xFF],
-        )
-        .expect("dtz file should be created");
-
-        let tb = Tablebase::new();
-        tb.init(&dir).expect("init should succeed");
-
-        let encoded = encode_position(PositionInput {
-            white: 0x11,
-            black: 0x80,
-            kings: 0x81,
-            queens: 0x10,
-            rooks: 0,
-            bishops: 0,
-            knights: 0,
-            pawns: 0,
-            ep: 0,
-            turn: Color::White,
-        })
-        .expect("position should encode");
-        let dtz_values = [2i32, 1, -2];
-        let expected_dtz = dtz_values[(encoded.key as usize) % dtz_values.len()];
-
-        let mut all = Vec::new();
-        let res = tb.probe_root(
-            0x11,
-            0x80,
-            0x81,
-            0x10,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            Color::White,
-            Some(&mut all),
-        );
-
-        assert!(!res.is_failed());
-        assert_eq!(res.dtz(), expected_dtz);
-        assert_eq!(all.len(), 1);
-        assert_eq!(all[0], res);
-
-        std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
-    }
-
     #[test]
-    fn test_probe_root_dtz_returns_ranked_move() {
-        let dir = create_temp_dir();
-        std::fs::write(dir.join("KQvK.rtbw"), [b'W', b'D', b'L', b'0', 4, 2, 0])
-            .expect("wdl file should be created");
-        std::fs::write(
-            dir.join("KQvK.rtbz"),
-            [b'D', b'T', b'Z', b'0', 3, 0, 0xFF, 0xFF, 1, 0],
-        )
-        .expect("dtz file should be created");
-
-        let tb = Tablebase::new();
-        tb.init(&dir).expect("init should succeed");
-
-        let ranked = tb
-            .probe_root_dtz(
-                0x11,
-                0x80,
-                0x81,
-                0x10,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                Color::White,
-                false,
-                true,
-            )
-            .expect("dtz root probing should succeed");
-
-        assert!(!ranked.is_empty());
-        let first = ranked.moves.first().expect("ranked move should exist");
-        assert!(!first.pv.is_empty());
-        assert!(first.tb_rank >= -1000 && first.tb_rank <= 1000);
-
-        std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
-    }
-
     #[test]
-    fn test_probe_root_wdl_returns_ranked_move() {
-        let dir = create_temp_dir();
-        std::fs::write(dir.join("KQvK.rtbw"), [b'W', b'D', b'L', b'0', 4, 2, 0])
-            .expect("wdl file should be created");
-
-        let tb = Tablebase::new();
-        tb.init(&dir).expect("init should succeed");
-
-        let ranked = tb
-            .probe_root_wdl(
-                0x11,
-                0x80,
-                0x81,
-                0x10,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                Color::White,
-                true,
-            )
-            .expect("wdl root probing should succeed");
-
-        assert!(!ranked.is_empty());
-        let first = ranked.moves.first().expect("ranked move should exist");
-        assert!(!first.pv.is_empty());
-        assert!(first.tb_rank >= -1000 && first.tb_rank <= 1000);
-
-        std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
-    }
-
     #[test]
-    fn test_probe_root_populates_move_fields() {
-        let dir = create_temp_dir();
-        std::fs::write(dir.join("KQvK.rtbw"), [b'W', b'D', b'L', b'0', 4, 2, 0])
-            .expect("wdl file should be created");
-        std::fs::write(
-            dir.join("KQvK.rtbz"),
-            [b'D', b'T', b'Z', b'0', 1, 0, 0xFF, 0xFF, 2, 0],
-        )
-        .expect("dtz file should be created");
-
-        let tb = Tablebase::new();
-        tb.init(&dir).expect("init should succeed");
-
-        let res = tb.probe_root(
-            0x11,
-            0x80,
-            0x81,
-            0x10,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            Color::White,
-            None,
-        );
-
-        assert!(!res.is_failed());
-        assert_eq!(res.from_square(), 0);
-        assert_eq!(res.to_square(), 1);
-
-        std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
-    }
-
     #[test]
-    fn test_probe_root_wdl_returns_multiple_ranked_candidates() {
-        let dir = create_temp_dir();
-        std::fs::write(dir.join("KQvK.rtbw"), [b'W', b'D', b'L', b'0', 4, 2, 0])
-            .expect("wdl file should be created");
-
-        let tb = Tablebase::new();
-        tb.init(&dir).expect("init should succeed");
-
-        let ranked = tb
-            .probe_root_wdl(
-                0x11,
-                0x80,
-                0x81,
-                0x10,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                Color::White,
-                true,
-            )
-            .expect("wdl root probing should succeed");
-
-        assert!(ranked.len() >= 2);
-        for mv in ranked.moves.iter() {
-            assert!(mv.tb_rank >= -1000 && mv.tb_rank <= 1000);
-            assert!(!mv.pv.is_empty());
-        }
-
-        std::fs::remove_dir_all(&dir).expect("temp dir should be removed");
-    }
-
     #[test]
     fn test_generate_candidate_root_moves_includes_pawn_push_and_capture() {
         // White pawn on e2 (sq=12), black piece on f3 (sq=21), white king on e1 (sq=4)

@@ -84,13 +84,13 @@ fn flip_colors(input: PositionInput) -> PositionInput {
 /// Compute a material strength score for a side's pieces.
 /// Higher values mean a stronger/larger army (used only for canonical ordering).
 fn material_strength(input: PositionInput, side: Bitboard) -> u32 {
-    let piece_count = (input.kings | input.queens | input.rooks
-        | input.bishops | input.knights | input.pawns)
-        .count_ones();
-    let own_count = ((input.kings | input.queens | input.rooks
-        | input.bishops | input.knights | input.pawns)
-        & side)
-        .count_ones();
+    let piece_count =
+        (input.kings | input.queens | input.rooks | input.bishops | input.knights | input.pawns)
+            .count_ones();
+    let own_count =
+        ((input.kings | input.queens | input.rooks | input.bishops | input.knights | input.pawns)
+            & side)
+            .count_ones();
     // Primary: piece count. Secondary: piece quality (Q>R>B>N>P).
     let quality = (input.queens & side).count_ones() * 9
         + (input.rooks & side).count_ones() * 5
@@ -127,7 +127,7 @@ fn validate_position(input: PositionInput) -> Result<(), EncodeError> {
 fn material_key(input: PositionInput) -> String {
     let w = side_material(input, input.white);
     let b = side_material(input, input.black);
-    format!("{}v{}", w, b)
+    format!("{}v{}", w, b).to_ascii_lowercase()
 }
 
 fn side_material(input: PositionInput, side: Bitboard) -> String {
@@ -189,7 +189,7 @@ mod tests {
         let a = encode_position(pos).expect("position should encode");
         let b = encode_position(pos).expect("position should encode");
         assert_eq!(a, b);
-        assert_eq!(a.material_key, "KQvK");
+        assert_eq!(a.material_key, "kqvk");
         assert!(!a.color_flipped);
     }
 
@@ -198,11 +198,11 @@ mod tests {
         // Black has the queen (bit 4), white just has king (bit 0), black king (bit 7).
         // pieces = kings | queens = 0x91 but we need exactly 2 kings.
         // white=king on a1 (bit 0), black=king on h1 (bit 7) + queen on e1 (bit 4).
-        let white = 0x01u64;         // bit 0 = a1
-        let black = 0x90u64;         // bit 4 = e1, bit 7 = h1
-        let kings  = 0x81u64;        // bit 0 = white king, bit 7 = black king
-        let queens = 0x10u64;        // bit 4 = black queen
-        // validate: kings | queens = 0x91, white | black = 0x91 ✓, kings.count = 2 ✓
+        let white = 0x01u64; // bit 0 = a1
+        let black = 0x90u64; // bit 4 = e1, bit 7 = h1
+        let kings = 0x81u64; // bit 0 = white king, bit 7 = black king
+        let queens = 0x10u64; // bit 4 = black queen
+                              // validate: kings | queens = 0x91, white | black = 0x91 ✓, kings.count = 2 ✓
         let pos = PositionInput {
             white,
             black,
@@ -216,7 +216,7 @@ mod tests {
             turn: Color::White,
         };
         let enc = encode_position(pos).expect("position should encode");
-        assert_eq!(enc.material_key, "KQvK");
+        assert_eq!(enc.material_key, "kqvk");
         assert!(enc.color_flipped);
     }
 
