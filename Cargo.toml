@@ -21,3 +21,7 @@ helper-api = []
 
 [lib]
 path = "src/lib.rs"
+
+[[bench]]
+name = "basic_bench"
+harness = false
