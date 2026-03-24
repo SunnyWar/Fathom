@@ -1,6 +1,7 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use rfathom::helper::{king_attacks, knight_attacks, pawn_attacks};
-use rfathom::types::{Color, Square};
+use rfathom::types::Color;
+use std::hint::black_box;
 
 fn bench_king_attacks(c: &mut Criterion) {
     c.bench_function("king_attacks_all_squares", |b| {

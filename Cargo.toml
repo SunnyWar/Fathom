@@ -26,3 +26,7 @@ path = "src/lib.rs"
 [[bench]]
 name = "basic_bench"
 harness = false
+
+[[bench]]
+name = "attack_tables"
+harness = false
